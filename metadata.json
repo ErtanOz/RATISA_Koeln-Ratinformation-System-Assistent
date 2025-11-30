@@ -1,0 +1,5 @@
+{
+  "name": "RATISA - Köln Ratinformation System Assistent",
+  "description": "A modern web application to search and browse the council information system of the city of Cologne, using the public OParl API. Users can find information about meetings, papers, people, and organizations.",
+  "requestFramePermissions": []
+}
