@@ -10,6 +10,12 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+coverage
+mcp-server/build
+mcp-server-netlify/build
+dev-log.txt
+tsc-out.txt
+tsc-errors.txt
 *.local
 
 # Editor directories and files
