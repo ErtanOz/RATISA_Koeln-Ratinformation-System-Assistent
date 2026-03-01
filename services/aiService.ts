@@ -366,7 +366,7 @@ export async function askGemini(
   attachments: Attachment[] = [],
 ): Promise<string> {
   if (!runtimeConfig.enableAi) {
-    return "⚠️ **Hinweis**: Die KI-Funktionen sind in dieser Umgebung deaktiviert.";
+    return "⚠️ **Hinweis**: Die KI-Funktionen sind in dieser Umgebung deaktiviert. Für Deployment setzen Sie `VITE_ENABLE_AI=true` sowie `GEMINI_API_KEY` (oder `OPENROUTER_API_KEY`).";
   }
 
   if (!apiKey) {

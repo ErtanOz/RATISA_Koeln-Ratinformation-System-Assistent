@@ -1697,7 +1697,7 @@ const SearchPage: React.FC = () => {
                     {isAiEnabled ? (
                         <>Tipp: Nutzen Sie die <strong>KI-Suche</strong>, um natürliche Anfragen wie <em>"Zeige mir alle Anträge der Grünen zum Thema Radverkehr aus 2024"</em> automatisch zu filtern.</>
                     ) : (
-                        <>Hinweis: KI-Suche ist in dieser Umgebung deaktiviert. Die normale Suche funktioniert weiterhin.</>
+                        <>Hinweis: KI-Suche ist in dieser Umgebung deaktiviert. Für Deployment bitte <code>VITE_ENABLE_AI=true</code> und einen gültigen <code>GEMINI_API_KEY</code> (oder <code>OPENROUTER_API_KEY</code>) setzen. Die normale Suche funktioniert weiterhin.</>
                     )}
                 </p>
             </form>
