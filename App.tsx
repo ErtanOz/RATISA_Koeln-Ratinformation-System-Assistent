@@ -11,6 +11,7 @@ import {
     McpToolInfo,
 } from './services/mcpPlaygroundService';
 import { askGemini, Attachment, parseSearchQuery } from './services/aiService';
+import { runtimeConfig } from './services/runtimeConfig';
 import { useFavorites } from './hooks/useFavorites';
 import { Meeting, Paper, Person, Organization, AgendaItem, Consultation, File as OparlFile, Location as OparlLocation } from './types';
 import { LoadingSpinner, ErrorMessage, Card, Pagination, PageTitle, DetailSection, DetailItem, DownloadLink, CalendarDaysIcon, DocumentTextIcon, HomeIcon, UsersIcon, BuildingLibraryIcon, LinkIcon, GeminiCard, SparklesIcon, TableSkeleton, FavoriteButton, StarIconSolid, ArchiveBoxIcon, MagnifyingGlassIcon, CommandLineIcon } from './components/ui';
@@ -127,7 +128,7 @@ const Header: React.FC = () => {
     
     // Safety check for AI service
     useEffect(() => {
-        if (!process.env.API_KEY && !process.env.GEMINI_API_KEY) {
+        if (runtimeConfig.enableAi && !process.env.API_KEY && !process.env.GEMINI_API_KEY) {
             console.warn("[RATISA] No API Key found. AI Search will be disabled.");
         }
     }, []);
@@ -1613,6 +1614,7 @@ const SearchPage: React.FC = () => {
     const navigate = useNavigate();
     const [query, setQuery] = useState('');
     const [isAiLoading, setIsAiLoading] = useState(false);
+    const isAiEnabled = runtimeConfig.enableAi;
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -1623,6 +1625,7 @@ const SearchPage: React.FC = () => {
     };
 
     const handleAiSearch = async () => {
+        if (!isAiEnabled) return;
         if (!query.trim()) return;
         setIsAiLoading(true);
         try {
@@ -1670,16 +1673,18 @@ const SearchPage: React.FC = () => {
                         placeholder="Suchbegriff eingeben (z.B. 'Klimaschutz' oder 'Verkehrsausschuss Mai 2024')" 
                         className="w-full bg-transparent border-none text-white px-4 py-3 focus:ring-0 placeholder-gray-500 text-lg"
                     />
-                     <button 
-                        type="button"
-                        onClick={handleAiSearch}
-                        disabled={isAiLoading || !query.trim()}
-                        className="hidden sm:flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-indigo-900/30 disabled:opacity-50 disabled:cursor-not-allowed mr-2"
-                        title="Intelligente Suche mit Gemini"
-                    >
-                         {isAiLoading ? <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div> : <SparklesIcon />}
-                         <span>KI-Suche</span>
-                    </button>
+                    {isAiEnabled && (
+                        <button 
+                            type="button"
+                            onClick={handleAiSearch}
+                            disabled={isAiLoading || !query.trim()}
+                            className="hidden sm:flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-lg shadow-indigo-900/30 disabled:opacity-50 disabled:cursor-not-allowed mr-2"
+                            title="Intelligente Suche mit Gemini"
+                        >
+                            {isAiLoading ? <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div> : <SparklesIcon />}
+                            <span>KI-Suche</span>
+                        </button>
+                    )}
                     <button 
                         type="submit"
                         disabled={isAiLoading || !query.trim()}
@@ -1688,9 +1693,13 @@ const SearchPage: React.FC = () => {
                         Suchen
                     </button>
                  </div>
-                 <p className="text-xs text-gray-500 mt-3 text-center">
-                    Tipp: Nutzen Sie die <strong>KI-Suche</strong>, um natürliche Anfragen wie <em>"Zeige mir alle Anträge der Grünen zum Thema Radverkehr aus 2024"</em> automatisch zu filtern.
-                 </p>
+                <p className="text-xs text-gray-500 mt-3 text-center">
+                    {isAiEnabled ? (
+                        <>Tipp: Nutzen Sie die <strong>KI-Suche</strong>, um natürliche Anfragen wie <em>"Zeige mir alle Anträge der Grünen zum Thema Radverkehr aus 2024"</em> automatisch zu filtern.</>
+                    ) : (
+                        <>Hinweis: KI-Suche ist in dieser Umgebung deaktiviert. Die normale Suche funktioniert weiterhin.</>
+                    )}
+                </p>
             </form>
             
             {/* Quick Links */}

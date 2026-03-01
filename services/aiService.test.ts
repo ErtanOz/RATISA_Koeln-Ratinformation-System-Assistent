@@ -44,6 +44,9 @@ const resetTestEnv = () => {
   delete process.env.GEMINI_MODEL;
   delete process.env.GEMINI_FALLBACK_MODELS;
   delete process.env.OPENROUTER_API_KEY;
+  delete process.env.VITE_ENABLE_AI;
+  delete process.env.VITE_OPARL_PROXY_PREFIX;
+  delete process.env.VITE_OPARL_BODY_ID;
 };
 
 const makeGeminiError = (
@@ -162,5 +165,25 @@ describe("aiService", () => {
       }),
     );
     expect(result).not.toBeNull();
+  });
+
+  it("keeps AI disabled when VITE_ENABLE_AI is false", async () => {
+    process.env.VITE_ENABLE_AI = "false";
+    process.env.GEMINI_API_KEY = "gemini-test-key";
+    process.env.OPENROUTER_API_KEY = `sk-or-v1-${"a".repeat(64)}`;
+
+    const { askGemini, parseSearchQuery } = await import("./aiService");
+    const askResult = await askGemini("ping");
+    const parseResult = await parseSearchQuery("Zeige mir Anträge aus 2024");
+
+    expect(askResult).toContain("deaktiviert");
+    expect(parseResult).toEqual(
+      expect.objectContaining({
+        minDate: "2024-01-01",
+        maxDate: "2024-12-31",
+      }),
+    );
+    expect(googleGenerateContentMock).not.toHaveBeenCalled();
+    expect(openRouterSendMock).not.toHaveBeenCalled();
   });
 });

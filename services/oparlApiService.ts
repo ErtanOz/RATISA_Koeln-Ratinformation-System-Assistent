@@ -1,9 +1,10 @@
 
 import { PagedResponse, OparlObject } from '../types';
+import { runtimeConfig } from './runtimeConfig';
 
 // Use relative URL so the Vite dev server proxy intercepts it and bypasses CORS.
 // In production, configure your web server (nginx/etc.) to proxy /oparl/* similarly.
-const BASE_URL = '/oparl/bodies/stadtverwaltung_koeln';
+const BASE_URL = runtimeConfig.oparlBaseUrl;
 
 // Hard Limit: Nach dieser Zeit werden Daten definitiv gelöscht/neu geladen
 const CACHE_TTL = 10 * 60 * 1000; // 10 Minuten
@@ -147,7 +148,7 @@ async function parseApiJson<T>(response: Response): Promise<T> {
       if (preview.startsWith('<!doctype') || preview.startsWith('<html')) {
           throw new ApiError(
               0,
-              'Ungültige API-Antwort: HTML statt JSON. Prüfen Sie die Proxy-/Redirect-Regel für /oparl/*.',
+              `Ungültige API-Antwort: HTML statt JSON. API-Basis: ${BASE_URL}. Prüfen Sie die Proxy-/Redirect-Regel für /oparl/*.`,
           );
       }
       if (contentType.includes('application/json')) {

@@ -1,5 +1,6 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { OpenRouter } from "@openrouter/sdk";
+import { runtimeConfig } from "./runtimeConfig";
 
 const DEFAULT_PRIMARY_GEMINI_MODEL = "gemini-2.5-flash";
 const DEFAULT_FALLBACK_GEMINI_MODELS = ["gemini-flash-latest"];
@@ -14,7 +15,9 @@ const normalizeEnvSecret = (value?: string) => {
 
 // Initialize with a fallback to avoid crash on init if key is missing,
 // but validate before usage inside the function.
-const apiKey = normalizeEnvSecret(process.env.API_KEY || process.env.GEMINI_API_KEY);
+const apiKey = runtimeConfig.enableAi
+  ? normalizeEnvSecret(process.env.API_KEY || process.env.GEMINI_API_KEY)
+  : undefined;
 
 const parseEnvList = (value?: string) =>
   (value || "")
@@ -38,7 +41,9 @@ const geminiModelChain = dedupe([
     : DEFAULT_FALLBACK_GEMINI_MODELS),
 ]);
 
-const rawOpenRouterKey = normalizeEnvSecret(process.env.OPENROUTER_API_KEY);
+const rawOpenRouterKey = runtimeConfig.enableAi
+  ? normalizeEnvSecret(process.env.OPENROUTER_API_KEY)
+  : undefined;
 
 const isValidOpenRouterKey = (key?: string) =>
   !!key && key.startsWith("sk-or-v1-") && key.length >= OPENROUTER_MIN_KEY_LENGTH;
@@ -56,7 +61,7 @@ const openRouterKey = isValidOpenRouterKey(rawOpenRouterKey)
   ? rawOpenRouterKey
   : undefined;
 
-if (rawOpenRouterKey && !openRouterKey) {
+if (runtimeConfig.enableAi && rawOpenRouterKey && !openRouterKey) {
   warnInvalidOpenRouterKey();
 }
 
@@ -226,7 +231,7 @@ async function tryOpenRouterFallback(
   context: string,
 ): Promise<string | null> {
   if (!openRouter) {
-    if (rawOpenRouterKey && !openRouterKey) {
+    if (runtimeConfig.enableAi && rawOpenRouterKey && !openRouterKey) {
       warnInvalidOpenRouterKey();
     }
     return null;
@@ -360,6 +365,10 @@ export async function askGemini(
   prompt: string,
   attachments: Attachment[] = [],
 ): Promise<string> {
+  if (!runtimeConfig.enableAi) {
+    return "⚠️ **Hinweis**: Die KI-Funktionen sind in dieser Umgebung deaktiviert.";
+  }
+
   if (!apiKey) {
     return "⚠️ **Konfigurationsfehler**: Kein API-Key gefunden. Bitte setzen Sie `API_KEY` oder `GEMINI_API_KEY`.";
   }
@@ -476,6 +485,7 @@ function fallbackParse(query: string): StructuredSearch {
 export async function parseSearchQuery(
   query: string,
 ): Promise<StructuredSearch | null> {
+  if (!runtimeConfig.enableAi) return fallbackParse(query);
   if (!apiKey) return fallbackParse(query);
 
   try {
