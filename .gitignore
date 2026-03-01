@@ -17,6 +17,7 @@ dev-log.txt
 tsc-out.txt
 tsc-errors.txt
 *.local
+.env.local
 
 # Editor directories and files
 .vscode/*
