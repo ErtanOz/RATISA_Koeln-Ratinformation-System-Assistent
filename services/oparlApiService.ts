@@ -137,6 +137,29 @@ function createRequestSignal(signal?: AbortSignal) {
     };
 }
 
+async function parseApiJson<T>(response: Response): Promise<T> {
+  const contentType = response.headers.get('content-type')?.toLowerCase() || '';
+  const bodyText = await response.text();
+  try {
+      return JSON.parse(bodyText) as T;
+  } catch {
+      const preview = bodyText.trimStart().slice(0, 120).toLowerCase();
+      if (preview.startsWith('<!doctype') || preview.startsWith('<html')) {
+          throw new ApiError(
+              0,
+              'Ungültige API-Antwort: HTML statt JSON. Prüfen Sie die Proxy-/Redirect-Regel für /oparl/*.',
+          );
+      }
+      if (contentType.includes('application/json')) {
+          throw new ApiError(0, 'Ungültige API-Antwort: JSON konnte nicht geparst werden.');
+      }
+      throw new ApiError(
+          0,
+          `Ungültige API-Antwort: JSON erwartet, erhalten: ${contentType || 'unknown'}.`,
+      );
+  }
+}
+
 export async function fetchFromApi<T>(url: string, signal?: AbortSignal): Promise<T> {
   const now = Date.now();
   const cached = cache.get(url);
@@ -216,7 +239,7 @@ export async function fetchFromApi<T>(url: string, signal?: AbortSignal): Promis
                   throw new ApiError(response.status, msg);
               }
 
-              const data = await response.json();
+              const data = await parseApiJson<T>(response);
               
               const entry: CacheEntry<T> = {
                   data,

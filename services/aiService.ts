@@ -5,10 +5,16 @@ const DEFAULT_PRIMARY_GEMINI_MODEL = "gemini-2.5-flash";
 const DEFAULT_FALLBACK_GEMINI_MODELS = ["gemini-flash-latest"];
 const OPENROUTER_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
 const OPENROUTER_MIN_KEY_LENGTH = 60;
+const normalizeEnvSecret = (value?: string) => {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return trimmed.replace(/^['"]|['"]$/g, "").trim();
+};
 
 // Initialize with a fallback to avoid crash on init if key is missing,
 // but validate before usage inside the function.
-const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+const apiKey = normalizeEnvSecret(process.env.API_KEY || process.env.GEMINI_API_KEY);
 
 const parseEnvList = (value?: string) =>
   (value || "")
@@ -32,7 +38,7 @@ const geminiModelChain = dedupe([
     : DEFAULT_FALLBACK_GEMINI_MODELS),
 ]);
 
-const rawOpenRouterKey = process.env.OPENROUTER_API_KEY?.trim();
+const rawOpenRouterKey = normalizeEnvSecret(process.env.OPENROUTER_API_KEY);
 
 const isValidOpenRouterKey = (key?: string) =>
   !!key && key.startsWith("sk-or-v1-") && key.length >= OPENROUTER_MIN_KEY_LENGTH;
