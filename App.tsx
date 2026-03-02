@@ -376,6 +376,9 @@ const PartyActivityChart: React.FC<{ year?: string }> = ({ year: targetYear }) =
                     ))}
                 </div>
             )}
+            <p className="mt-4 text-[11px] leading-relaxed text-gray-500">
+                Unbekannt bedeutet “Antrag erkannt, aber keiner Fraktion per Text-Matching zuordenbar”.
+            </p>
         </div>
     );
 };
