@@ -39,4 +39,26 @@ describe('useOparlFiltered', () => {
     expect(result.current.data?.pagination.totalElements).toBe(2);
     expect(result.current.data?.data.map((x: any) => x.id)).toEqual(['2', '1']);
   });
+
+  it('applies classification field filter for organizations', async () => {
+    const getListAllMock = vi.mocked(apiService.getListAll);
+    getListAllMock.mockResolvedValue([
+      { id: '1', name: 'Ausschuss A', classification: 'Fachausschüsse und weitere Gremien' },
+      { id: '2', name: 'Fraktion A', classification: 'Fraktionen und Gruppen' },
+      { id: '3', name: 'Fraktion B', classification: 'Fraktionen und Gruppen' },
+      { id: '4', name: 'Rat', classification: 'Rat' },
+    ] as any[]);
+
+    const { result } = renderHook(() =>
+      useOparlFiltered<any>('organizations', {
+        fieldFilters: { classification: 'Fraktionen und Gruppen' },
+        currentPage: 1,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.data?.pagination.totalElements).toBe(2);
+    expect(result.current.data?.data.map((x: any) => x.name)).toEqual(['Fraktion A', 'Fraktion B']);
+  });
 });

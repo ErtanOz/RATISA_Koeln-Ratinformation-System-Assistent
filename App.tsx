@@ -124,6 +124,31 @@ const STOP_WORDS = new Set([
     'koeln', 'gemäß', 'betr', 'wg', 'bzgl', 'anlage', 'anlagen'
 ]);
 
+const ORGANIZATION_CLASSIFICATIONS = [
+    'Fachausschüsse und weitere Gremien',
+    'Fraktionen und Gruppen',
+    'Bezirksvertretungen',
+    'Rat',
+] as const;
+
+export const normalizeOrganizationClassification = (value?: string | null): string | undefined => {
+    if (!value) return undefined;
+    const trimmed = value.trim();
+    if (!trimmed) return undefined;
+
+    if ((ORGANIZATION_CLASSIFICATIONS as readonly string[]).includes(trimmed)) return trimmed;
+
+    const lower = trimmed.toLowerCase();
+    if (lower.includes('fraktion') || lower.includes('gruppe')) return 'Fraktionen und Gruppen';
+    if (lower.includes('bezirksvertret')) return 'Bezirksvertretungen';
+    if (lower === 'rat') return 'Rat';
+    if (lower.includes('fachaussch') || lower.includes('ausschuss') || lower.includes('beirat') || lower.includes('gremium')) {
+        return 'Fachausschüsse und weitere Gremien';
+    }
+
+    return trimmed;
+};
+
 // Layout Components
 const Header: React.FC = () => {
     const location = useLocation();
@@ -384,17 +409,33 @@ const PartyActivityChart: React.FC<{ year?: string }> = ({ year: targetYear }) =
 };
 
 // ... (SimplePieChart & OrganizationTypeChart Logik bleibt weitgehend gleich, aber visueller Refresh)
-const SimplePieChart: React.FC<{ data: { name: string; value: number; color: string }[] }> = ({ data }) => {
+const SimplePieChart: React.FC<{
+    data: { name: string; value: number; color: string }[];
+    selectedName?: string;
+    onSegmentClick?: (name: string) => void;
+}> = ({ data, selectedName, onSegmentClick }) => {
     const total = data.reduce((acc, item) => acc + item.value, 0);
+    const hasSelection = Boolean(selectedName);
     let currentAngle = 0;
     if (total === 0) return null;
 
     if (data.length === 1) {
+        const isSelected = selectedName === data[0].name;
         return (
              // ... single circle code
              <div className="relative w-40 h-40 mx-auto">
                 <svg viewBox="-100 -100 200 200" className="w-full h-full drop-shadow-xl">
-                    <circle cx="0" cy="0" r="100" fill={data[0].color} />
+                    <circle
+                        cx="0"
+                        cy="0"
+                        r="100"
+                        fill={data[0].color}
+                        stroke={isSelected ? '#f3f4f6' : '#1f2937'}
+                        strokeWidth={isSelected ? '6' : '4'}
+                        className={`${onSegmentClick ? 'cursor-pointer' : 'cursor-default'} transition-opacity ${hasSelection && !isSelected ? 'opacity-40' : 'opacity-100'}`}
+                        data-testid="pie-segment-0"
+                        onClick={() => onSegmentClick?.(data[0].name)}
+                    />
                     <circle cx="0" cy="0" r="70" fill="#1f2937" />
                 </svg>
                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -410,11 +451,12 @@ const SimplePieChart: React.FC<{ data: { name: string; value: number; color: str
     return (
         <div className="relative w-40 h-40 mx-auto">
             <svg viewBox="-100 -100 200 200" className="w-full h-full transform -rotate-90 drop-shadow-xl">
-                {data.map((item) => {
+                {data.map((item, index) => {
                     const percentage = item.value / total;
                     const angle = percentage * 360;
                     const largeArcFlag = angle > 180 ? 1 : 0;
                     const r = 100;
+                    const isSelected = selectedName === item.name;
                     const startRad = (currentAngle * Math.PI) / 180;
                     const endRad = ((currentAngle + angle) * Math.PI) / 180;
                     const x1 = r * Math.cos(startRad);
@@ -423,7 +465,18 @@ const SimplePieChart: React.FC<{ data: { name: string; value: number; color: str
                     const y2 = r * Math.sin(endRad);
                     const path = `M 0 0 L ${x1} ${y1} A ${r} ${r} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`;
                     currentAngle += angle;
-                    return <path key={item.name} d={path} fill={item.color} stroke="#1f2937" strokeWidth="4" className="hover:opacity-80 transition-opacity cursor-pointer" />;
+                    return (
+                        <path
+                            key={item.name}
+                            d={path}
+                            fill={item.color}
+                            stroke={isSelected ? '#f3f4f6' : '#1f2937'}
+                            strokeWidth={isSelected ? '6' : '4'}
+                            data-testid={`pie-segment-${index}`}
+                            onClick={() => onSegmentClick?.(item.name)}
+                            className={`${onSegmentClick ? 'cursor-pointer' : 'cursor-default'} hover:opacity-80 transition-opacity ${hasSelection && !isSelected ? 'opacity-40' : 'opacity-100'}`}
+                        />
+                    );
                 })}
                 <circle cx="0" cy="0" r="70" fill="#1f2937" />
             </svg>
@@ -437,13 +490,16 @@ const SimplePieChart: React.FC<{ data: { name: string; value: number; color: str
     );
 };
 
-const OrganizationTypeChart: React.FC = () => {
+const OrganizationTypeChart: React.FC<{
+    selectedClassification?: string;
+    onToggleClassification?: (value: string) => void;
+}> = ({ selectedClassification, onToggleClassification }) => {
     // ... (logic identical, just better UI wrapper)
     const [stats, setStats] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [retryTrigger, setRetryTrigger] = useState(0);
     const COLORS = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6', '#0ea5e9'];
+    const hasSelection = Boolean(selectedClassification);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -456,7 +512,7 @@ const OrganizationTypeChart: React.FC = () => {
                 const counts = new Map<string, number>();
                 let totalCount = 0;
                 result.data.forEach(org => {
-                    const type = org.organizationType || org.classification || 'Sonstige';
+                    const type = normalizeOrganizationClassification(org.classification || org.organizationType || 'Sonstige') || 'Sonstige';
                     counts.set(type, (counts.get(type) || 0) + 1);
                     totalCount++;
                 });
@@ -467,7 +523,7 @@ const OrganizationTypeChart: React.FC = () => {
         };
         fetchTypes();
         return () => controller.abort();
-    }, [retryTrigger]);
+    }, []);
 
     if (loading) return <div className="h-40 flex items-center justify-center"><LoadingSpinner /></div>;
     if (stats.length === 0) return null;
@@ -480,11 +536,21 @@ const OrganizationTypeChart: React.FC = () => {
             </h3>
             <div className="flex flex-col md:flex-row items-center justify-center gap-8">
                 <div className="flex-shrink-0 scale-100 hover:scale-105 transition-transform duration-300">
-                    <SimplePieChart data={chartData} />
+                    <SimplePieChart
+                        data={chartData}
+                        selectedName={selectedClassification}
+                        onSegmentClick={onToggleClassification}
+                    />
                 </div>
                 <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {stats.map((stat, i) => (
-                        <div key={i} className="flex items-center p-2 rounded-lg hover:bg-white/5 transition-colors cursor-default">
+                        <button
+                            key={i}
+                            type="button"
+                            aria-pressed={selectedClassification === stat.name}
+                            onClick={() => onToggleClassification?.(stat.name)}
+                            className={`flex items-center p-2 rounded-lg transition-colors w-full text-left ${onToggleClassification ? 'cursor-pointer hover:bg-white/5' : 'cursor-default'} ${selectedClassification === stat.name ? 'bg-white/10 ring-1 ring-indigo-400/60' : ''} ${hasSelection && selectedClassification !== stat.name ? 'opacity-60' : ''}`}
+                        >
                             <div className="w-2.5 h-2.5 rounded-full mr-3 flex-shrink-0 ring-2 ring-white/10" style={{ backgroundColor: stat.color }}></div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-baseline">
@@ -492,7 +558,7 @@ const OrganizationTypeChart: React.FC = () => {
                                     <span className="text-[10px] text-gray-400 font-mono ml-2">{Math.round(stat.percentage)}%</span>
                                 </div>
                             </div>
-                        </div>
+                        </button>
                     ))}
                 </div>
             </div>
@@ -565,14 +631,20 @@ const FilterSelect: React.FC<{
     const location = useLocation();
     const navigate = useNavigate();
     const searchParams = new URLSearchParams(location.search);
-    const currentVal = searchParams.get(paramName) || '';
+    const currentVal =
+        paramName === 'classification'
+            ? normalizeOrganizationClassification(searchParams.get('classification') || searchParams.get('organizationType')) || ''
+            : searchParams.get(paramName) || '';
 
     const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const val = e.target.value;
         const newParams = new URLSearchParams(location.search);
+        const normalizedValue = paramName === 'classification' ? normalizeOrganizationClassification(val) || val : val;
         
-        if (val) newParams.set(paramName, val);
+        if (normalizedValue) newParams.set(paramName, normalizedValue);
         else newParams.delete(paramName);
+
+        if (paramName === 'classification') newParams.delete('organizationType');
         
         newParams.set('page', '1');
         navigate({ search: newParams.toString() });
@@ -1219,13 +1291,13 @@ const GenericListPage: React.FC<GenericListPageProps> = ({ resource, title, subt
     const sortDesc = effectiveSort.startsWith('-');
     const sortField = effectiveSort.replace(/^-/, '') || undefined;
 
-    // Field filters: paperType, organizationType, name-search etc.
+    // Field filters: paperType, classification etc.
     const fieldFilters = useMemo(() => {
         const filters: Record<string, string> = {};
-        ['paperType', 'organizationType'].forEach(key => {
-            const val = urlParams.get(key);
-            if (val) filters[key] = val;
-        });
+        const paperType = urlParams.get('paperType');
+        const classification = normalizeOrganizationClassification(urlParams.get('classification') || urlParams.get('organizationType'));
+        if (paperType) filters.paperType = paperType;
+        if (classification) filters.classification = classification;
         return Object.keys(filters).length > 0 ? filters : undefined;
     }, [urlParams]);
 
@@ -1769,10 +1841,98 @@ const MeetingsPage: React.FC = () => {
   );
 };
 
-const App: React.FC = () => {
-  const now = new Date();
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+export const OrganizationsPage: React.FC = () => {
+    const location = useLocation();
+    const navigate = useNavigate();
+    const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+    const selectedClassification = normalizeOrganizationClassification(
+        searchParams.get('classification') || searchParams.get('organizationType'),
+    );
 
+    useEffect(() => {
+        const legacyType = searchParams.get('organizationType');
+        const hasClassification = searchParams.has('classification');
+        if (!legacyType || hasClassification) return;
+        const mappedClassification = normalizeOrganizationClassification(legacyType);
+        if (!mappedClassification) return;
+        const nextParams = new URLSearchParams(location.search);
+        nextParams.delete('organizationType');
+        nextParams.set('classification', mappedClassification);
+        nextParams.set('page', '1');
+        navigate({ search: nextParams.toString() }, { replace: true });
+    }, [location.search, navigate, searchParams]);
+
+    const handleToggleClassification = useCallback((value: string) => {
+        const mappedValue = normalizeOrganizationClassification(value);
+        if (!mappedValue) return;
+        const nextParams = new URLSearchParams(location.search);
+        const currentValue = normalizeOrganizationClassification(nextParams.get('classification'));
+        nextParams.delete('organizationType');
+        if (currentValue === mappedValue) {
+            nextParams.delete('classification');
+        } else {
+            nextParams.set('classification', mappedValue);
+        }
+        nextParams.set('page', '1');
+        navigate({ search: nextParams.toString() });
+    }, [location.search, navigate]);
+
+    return (
+        <GenericListPage
+            resource="organizations"
+            title="Gremien"
+            subtitle="Ausschüsse & Fraktionen"
+            topContent={
+                <>
+                    <OrganizationTypeChart
+                        selectedClassification={selectedClassification}
+                        onToggleClassification={handleToggleClassification}
+                    />
+                    <FilterSelect
+                        label="Gremienart filtern"
+                        paramName="classification"
+                        options={[
+                            { value: 'Fachausschüsse und weitere Gremien', label: 'Ausschüsse und weitere Gremien' },
+                            { value: 'Fraktionen und Gruppen', label: 'Fraktionen und Gruppen' },
+                            { value: 'Bezirksvertretungen', label: 'Bezirksvertretungen' },
+                            { value: 'Rat', label: 'Rat' },
+                        ]}
+                        icon={<BuildingLibraryIcon />}
+                    />
+                </>
+            }
+            searchPlaceholder="Gremium suchen..."
+            columnClasses={['', 'hidden md:table-cell', 'hidden sm:table-cell']}
+            renderItem={(item: Organization | "header") => {
+                if (item === "header") return <tr><th className="p-4 pl-6">Name</th><th className="p-4 hidden md:table-cell">Typ</th><th className="p-4 hidden sm:table-cell">Art</th></tr>;
+                return (
+                    <tr key={item.id} className="hover:bg-white/5 border-b border-gray-700/50 last:border-0 group transition-colors">
+                        <td className="p-4 pl-6 font-medium relative pr-10">
+                            <span className="text-gray-200 font-bold">{item.name}</span>
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <FavoriteButton item={{ id: item.id, type: 'organization', name: item.name, path: `/organizations`, info: item.classification || item.organizationType }} />
+                            </div>
+                        </td>
+                        <td className="p-4 hidden md:table-cell text-gray-400 text-sm">{item.organizationType}</td>
+                        <td className="p-4 hidden sm:table-cell text-gray-500 text-xs uppercase tracking-wide">{item.classification}</td>
+                    </tr>
+                );
+            }}
+            renderCard={(item: Organization) => (
+                <div key={item.id} className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4">
+                    <div className="flex justify-between items-start mb-2">
+                        <span className="text-[10px] uppercase font-bold text-indigo-400 bg-indigo-900/20 px-2 py-0.5 rounded">{item.classification || item.organizationType || 'Gremium'}</span>
+                        <FavoriteButton item={{ id: item.id, type: 'organization', name: item.name, path: `/organizations` }} />
+                    </div>
+                    <p className="text-white font-bold">{item.name}</p>
+                    {item.classification && <p className="text-xs text-gray-500 mt-1">{item.classification}</p>}
+                </div>
+            )}
+        />
+    );
+};
+
+const App: React.FC = () => {
   return (
     <Router initialEntries={['/']}>
       <Layout>
@@ -1820,56 +1980,7 @@ const App: React.FC = () => {
             )}
             />} />
 
-          <Route path="/organizations" element={<GenericListPage
-            resource="organizations"
-            title="Gremien"
-            subtitle="Ausschüsse & Fraktionen"
-            topContent={
-                <>
-                    <OrganizationTypeChart />
-                    <FilterSelect 
-                        label="Gremienart filtern" 
-                        paramName="organizationType" 
-                        options={[
-                            { value: "Ausschuss", label: "Ausschüsse" },
-                            { value: "Fraktion", label: "Fraktionen" },
-                            { value: "Bezirksvertretung", label: "Bezirksvertretungen" },
-                            { value: "Rat", label: "Rat" },
-                            { value: "Beirat", label: "Beiräte" },
-                            { value: "Gremium", label: "Sonstige Gremien" }
-                        ]}
-                        icon={<BuildingLibraryIcon />}
-                    />
-                </>
-            }
-            searchPlaceholder="Gremium suchen..."
-            columnClasses={['', 'hidden md:table-cell', 'hidden sm:table-cell']}
-            renderItem={(item: Organization | "header") => {
-                if (item === "header") return <tr><th className="p-4 pl-6">Name</th><th className="p-4 hidden md:table-cell">Typ</th><th className="p-4 hidden sm:table-cell">Art</th></tr>;
-                return (
-                    <tr key={item.id} className="hover:bg-white/5 border-b border-gray-700/50 last:border-0 group transition-colors">
-                        <td className="p-4 pl-6 font-medium relative pr-10">
-                            <span className="text-gray-200 font-bold">{item.name}</span>
-                             <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <FavoriteButton item={{ id: item.id, type: 'organization', name: item.name, path: `/organizations`, info: item.organizationType }} />
-                            </div>
-                        </td>
-                        <td className="p-4 hidden md:table-cell text-gray-400 text-sm">{item.organizationType}</td>
-                        <td className="p-4 hidden sm:table-cell text-gray-500 text-xs uppercase tracking-wide">{item.classification}</td>
-                    </tr>
-                );
-            }}
-            renderCard={(item: Organization) => (
-                <div key={item.id} className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4">
-                    <div className="flex justify-between items-start mb-2">
-                         <span className="text-[10px] uppercase font-bold text-indigo-400 bg-indigo-900/20 px-2 py-0.5 rounded">{item.organizationType || 'Gremium'}</span>
-                         <FavoriteButton item={{ id: item.id, type: 'organization', name: item.name, path: `/organizations` }} />
-                    </div>
-                    <p className="text-white font-bold">{item.name}</p>
-                    {item.classification && <p className="text-xs text-gray-500 mt-1">{item.classification}</p>}
-                </div>
-            )}
-            />} />
+          <Route path="/organizations" element={<OrganizationsPage />} />
             
             <Route path="/mcp" element={<McpGuidePage />} />
         </Routes>
