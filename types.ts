@@ -114,7 +114,7 @@ export interface Paper extends OparlObject {
   mainFile?: File;
   auxiliaryFile?: File[];
   location?: Location[];
-  consultation: Consultation[];
+  consultation: (string | Consultation)[];
   underDirectionOf?: string[];
   originator?: string[];
 }

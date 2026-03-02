@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { MemoryRouter as Router, Routes, Route, Link, NavLink, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useOparlList, useOparlItem, useOparlFiltered, FilterConfig } from './hooks/useOparl';
 import { usePaperResults } from './hooks/usePaperResults';
-import { getList, getItem } from './services/oparlApiService';
+import { getList } from './services/oparlApiService';
 import {
     callMcpTool,
     listMcpTools,
@@ -16,6 +16,8 @@ import { useFavorites } from './hooks/useFavorites';
 import { Meeting, Paper, Person, Organization, AgendaItem, Consultation, File as OparlFile, Location as OparlLocation } from './types';
 import { LoadingSpinner, ErrorMessage, Card, Pagination, PageTitle, DetailSection, DetailItem, DownloadLink, CalendarDaysIcon, DocumentTextIcon, HomeIcon, UsersIcon, BuildingLibraryIcon, LinkIcon, GeminiCard, SparklesIcon, TableSkeleton, FavoriteButton, StarIconSolid, ArchiveBoxIcon, MagnifyingGlassIcon, CommandLineIcon } from './components/ui';
 import { validateDateRange } from './utils/dateFilters';
+import { buildFactionMatchers } from './utils/factionMatching';
+import { computePartyActivityStats, PartyActivityStat } from './utils/partyActivityStats';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: <HomeIcon /> },
@@ -287,20 +289,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 
 // --- Charts & Statistics ---
 
-interface PartyStats {
-    name: string;
-    count: number;
-    percentage: number;
-}
-
 const PartyActivityChart: React.FC<{ year?: string }> = ({ year: targetYear }) => {
-    // ... (Logik bleibt identisch, nur Styling update)
     const currentYear = new Date().getFullYear().toString();
-    const [stats, setStats] = useState<PartyStats[]>([]);
+    const [stats, setStats] = useState<PartyActivityStat[]>([]);
     const [year, setYear] = useState<string>(targetYear ?? currentYear);
+    const [hasMotions, setHasMotions] = useState(false);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const [retryTrigger, setRetryTrigger] = useState(0);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -308,44 +303,34 @@ const PartyActivityChart: React.FC<{ year?: string }> = ({ year: targetYear }) =
             try {
                 setLoading(true);
                 setError(null);
-                const params = new URLSearchParams();
-                params.set('limit', '200');
-                params.set('sort', '-date');
-                const result = await getList<Paper>('papers', params, controller.signal);
+                const paperParams = new URLSearchParams();
+                paperParams.set('limit', '200');
+                paperParams.set('sort', '-date');
+
+                const organizationParams = new URLSearchParams();
+                organizationParams.set('limit', '400');
+
+                const [paperResult, organizationResult] = await Promise.all([
+                    getList<Paper>('papers', paperParams, controller.signal),
+                    getList<Organization>('organizations', organizationParams, controller.signal),
+                ]);
                 if (controller.signal.aborted) return;
 
                 const activeYear = targetYear ?? currentYear;
                 setYear(activeYear);
-                const counts = new Map<string, number>();
-                let totalCount = 0;
-                result.data.forEach(paper => {
-                    if (paper.date && paper.date.startsWith(activeYear)) {
-                        const isMotion = (paper.paperType?.toLowerCase().includes('antrag')) || (paper.name?.toLowerCase().includes('antrag'));
-                        if (isMotion && paper.originator?.length) {
-                            paper.originator.forEach(orgUrl => {
-                                counts.set(orgUrl, (counts.get(orgUrl) || 0) + 1);
-                                totalCount++;
-                            });
-                        }
-                    }
+
+                const factionMatchers = buildFactionMatchers(organizationResult.data);
+                const { stats: computedStats, motionCount } = computePartyActivityStats({
+                    papers: paperResult.data,
+                    year: activeYear,
+                    factionMatchers,
+                    topN: 8,
+                    unknownLabel: 'Unbekannt',
                 });
 
-                if (totalCount === 0) {
-                    if (!controller.signal.aborted) { setStats([]); setLoading(false); }
-                    return;
-                }
-
-                const sortedEntries = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
-                const statsPromises = sortedEntries.map(async ([url, count]) => {
-                    if (controller.signal.aborted) return null;
-                    try {
-                        const org = await getItem<Organization>(url, controller.signal);
-                        return { name: org.name || org.shortName || 'Unbekannt', count, percentage: (count / totalCount) * 100 };
-                    } catch (e) { return { name: 'Unbekannt', count, percentage: (count/totalCount)*100 }; }
-                });
-                const fetchedStats = await Promise.all(statsPromises);
                 if (!controller.signal.aborted) {
-                    setStats(fetchedStats.filter((s): s is PartyStats => s !== null));
+                    setStats(computedStats);
+                    setHasMotions(motionCount > 0);
                     setLoading(false);
                 }
             } catch (err) {
@@ -355,7 +340,7 @@ const PartyActivityChart: React.FC<{ year?: string }> = ({ year: targetYear }) =
         };
         fetchStats();
         return () => { controller.abort(); };
-    }, [targetYear, retryTrigger]);
+    }, [targetYear]);
 
     if (loading) return <div className="h-48 flex items-center justify-center"><LoadingSpinner /></div>;
     if (error) return <div className="text-red-400 text-sm p-4 bg-red-900/20 rounded-lg">{error}</div>;
@@ -363,11 +348,14 @@ const PartyActivityChart: React.FC<{ year?: string }> = ({ year: targetYear }) =
     return (
         <div>
              <div className="flex justify-between items-end mb-6">
-                <p className="text-sm text-gray-400">Anträge pro Fraktion ({year})</p>
+                <div>
+                    <p className="text-sm text-gray-400">Anträge pro Fraktion ({year})</p>
+                    <p className="text-[11px] text-gray-500">heuristisch aus Titel und Typ</p>
+                </div>
                 <span className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">Top 8</span>
              </div>
-            {stats.length === 0 ? (
-                <div className="p-8 text-center text-gray-500 bg-gray-900/50 rounded-lg border border-gray-800 border-dashed">Keine Daten für {year}.</div>
+            {!hasMotions ? (
+                <div className="p-8 text-center text-gray-500 bg-gray-900/50 rounded-lg border border-gray-800 border-dashed">Keine Anträge für {year}.</div>
             ) : (
                 <div className="space-y-4">
                     {stats.map((stat, index) => (
