@@ -503,12 +503,12 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                         </a>
                         {' '}and supported by{' '}
                         <a
-                            href="https://www.digitalheritage.com"
+                            href="https://digitalheritagelab.com/"
                             className="text-gray-400 hover:text-white transition-colors underline underline-offset-2"
                             target="_blank"
                             rel="noreferrer"
                         >
-                            www.digitalheritage.com
+                            digitalheritagelab.com
                         </a>
                     </p>
                 </div>
