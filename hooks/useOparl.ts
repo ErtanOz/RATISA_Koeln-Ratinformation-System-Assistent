@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { getList, getItem, getListAll } from '../services/oparlApiService';
+import { getList, getItem, getListSnapshot } from '../services/oparlApiService';
 import { PagedResponse } from '../types';
 
 const ITEMS_PER_PAGE = 25;
@@ -123,8 +123,8 @@ function sortItems<T>(items: T[], sortField: string, sortDesc: boolean): T[] {
 }
 
 /**
- * Fetches all records (limit=200) once and applies all filters/sorting/pagination client-side.
- * This is necessary because the OParl Köln API silently ignores all filter params.
+ * Fetches a bounded snapshot and applies filters/sorting/pagination client-side.
+ * This intentionally favors responsiveness over complete history coverage.
  */
 export function useOparlFiltered<T extends { id: string }>(
     resource: string,
@@ -145,7 +145,7 @@ export function useOparlFiltered<T extends { id: string }>(
         setIsLoading(true);
         setError(null);
         try {
-            const items = await getListAll<T>(resource, controller.signal);
+            const items = await getListSnapshot<T>(resource, controller.signal);
             if (!controller.signal.aborted) {
                 setAllData(items);
                 setIsLoading(false);

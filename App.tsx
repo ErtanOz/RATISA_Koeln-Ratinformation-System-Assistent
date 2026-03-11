@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useDeferredValue } from 'react';
 import { MemoryRouter as Router, Routes, Route, Link, NavLink, useParams, useNavigate, useLocation } from 'react-router-dom';
-import { useOparlList, useOparlItem, useOparlFiltered, FilterConfig } from './hooks/useOparl';
+import { useOparlItem, useOparlFiltered, FilterConfig } from './hooks/useOparl';
+import { useDashboardData } from './hooks/useDashboardData';
 import { usePaperResults } from './hooks/usePaperResults';
-import { getList } from './services/oparlApiService';
+import { getList, getListSnapshot, getItem } from './services/oparlApiService';
 import {
     callMcpTool,
     listMcpTools,
@@ -11,10 +12,17 @@ import {
     McpToolInfo,
 } from './services/mcpPlaygroundService';
 import { askGemini, Attachment, parseSearchQuery } from './services/aiService';
+import {
+    ArchiveMeetingIndexItem,
+    ArchiveMeetingIndexDocument,
+    clearArchiveMeetingIndexCache,
+    loadArchiveMeetingIndex,
+    queryArchiveMeetingIndex,
+} from './services/archiveDeepSearchService';
 import { runtimeConfig } from './services/runtimeConfig';
 import { useFavorites } from './hooks/useFavorites';
-import { Meeting, Paper, Person, Organization, AgendaItem, Consultation, File as OparlFile, Location as OparlLocation } from './types';
-import { LoadingSpinner, ErrorMessage, Card, Pagination, PageTitle, DetailSection, DetailItem, DownloadLink, CalendarDaysIcon, DocumentTextIcon, HomeIcon, UsersIcon, BuildingLibraryIcon, LinkIcon, GeminiCard, SparklesIcon, TableSkeleton, FavoriteButton, StarIconSolid, ArchiveBoxIcon, MagnifyingGlassIcon, CommandLineIcon } from './components/ui';
+import { Meeting, Paper, Person, Organization, AgendaItem, Consultation, File as OparlFile, Location as OparlLocation, PagedResponse } from './types';
+import { LoadingSpinner, ErrorMessage, Card, Pagination, PageTitle, DetailSection, DetailItem, DownloadLink, CalendarDaysIcon, DocumentTextIcon, HomeIcon, UsersIcon, BuildingLibraryIcon, LinkIcon, GeminiCard, SparklesIcon, TableSkeleton, FavoriteButton, StarIconSolid, ArchiveBoxIcon, MagnifyingGlassIcon, CommandLineIcon, InformationCircleIcon } from './components/ui';
 import { validateDateRange } from './utils/dateFilters';
 import { buildFactionMatchers } from './utils/factionMatching';
 import { computePartyActivityStats, PartyActivityStat } from './utils/partyActivityStats';
@@ -28,6 +36,7 @@ const NAV_ITEMS = [
   { path: '/people', label: 'Personen', icon: <UsersIcon /> },
   { path: '/organizations', label: 'Gremien', icon: <BuildingLibraryIcon /> },
   { path: '/mcp', label: 'MCP Server', icon: <CommandLineIcon /> },
+  { path: '/help', label: 'Hilfe / Informationen', icon: <InformationCircleIcon /> },
 ];
 
 // Helper to encode URL for router param - URL SAFE BASE64
@@ -81,6 +90,145 @@ const formatDateOnly = (dateStr?: string) => {
     } catch (e) { return ''; }
 };
 
+type MeetingDocumentCategory = 'minutes' | 'invitation' | 'agenda' | 'other';
+type MeetingDocumentSource = 'auxiliaryFile' | 'invitation' | 'resultsProtocol' | 'verbatimProtocol';
+
+interface MeetingDocumentEntry {
+    key: string;
+    file: OparlFile;
+    category: MeetingDocumentCategory;
+}
+
+interface AgendaPaperLink {
+    paperId: string;
+    href: string;
+    title?: string;
+    reference?: string;
+}
+
+const MEETING_DOCUMENT_PRIORITY: Record<MeetingDocumentCategory, number> = {
+    minutes: 0,
+    invitation: 1,
+    agenda: 2,
+    other: 3,
+};
+
+const isOparlFile = (value: unknown): value is OparlFile => {
+    return Boolean(
+        value &&
+        typeof value === 'object' &&
+        typeof (value as OparlFile).accessUrl === 'string' &&
+        typeof (value as OparlFile).mimeType === 'string',
+    );
+};
+
+const inferMimeTypeFromUrl = (url: string) => {
+    const lower = url.toLowerCase();
+    if (lower.includes('.pdf')) return 'application/pdf';
+    if (lower.includes('.docx')) return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if (lower.includes('.doc')) return 'application/msword';
+    if (lower.includes('.xlsx')) return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    if (lower.includes('.xls')) return 'application/vnd.ms-excel';
+    return 'application/octet-stream';
+};
+
+const toResolvableMeetingFile = (
+    value: Meeting['invitation'] | undefined,
+    fallbackName: string,
+): OparlFile | null => {
+    if (!value) return null;
+    if (isOparlFile(value)) return value;
+    if (
+        typeof value === 'string' &&
+        (/\/downloadfiles\//i.test(value) || /\.(pdf|docx?|xlsx?|zip)(\?|#|$)/i.test(value))
+    ) {
+        return {
+            id: value,
+            type: 'https://schema.oparl.org/1.1/File',
+            name: fallbackName,
+            mimeType: inferMimeTypeFromUrl(value),
+            accessUrl: value,
+            created: '',
+            modified: '',
+        };
+    }
+    return null;
+};
+
+const classifyMeetingDocument = (
+    file: OparlFile,
+    source: MeetingDocumentSource,
+): MeetingDocumentCategory => {
+    if (source === 'invitation') return 'invitation';
+    if (source === 'resultsProtocol' || source === 'verbatimProtocol') return 'minutes';
+
+    const searchableName = `${file.name || ''} ${file.fileName || ''}`.trim().toLowerCase();
+    if (searchableName.includes('niederschrift') || searchableName.includes('protokoll')) return 'minutes';
+    if (searchableName.includes('einladung')) return 'invitation';
+    if (searchableName.includes('tagesordnung')) return 'agenda';
+    return 'other';
+};
+
+const buildMeetingDocuments = (meeting: Meeting): MeetingDocumentEntry[] => {
+    const seen = new Set<string>();
+    const documents: MeetingDocumentEntry[] = [];
+
+    const pushDocument = (
+        value: Meeting['invitation'] | undefined,
+        source: MeetingDocumentSource,
+        fallbackName: string,
+    ) => {
+        const file = toResolvableMeetingFile(value, fallbackName);
+        if (!file) return;
+
+        const key = file.id || file.accessUrl || `${source}:${file.name}`;
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+
+        documents.push({
+            key,
+            file,
+            category: classifyMeetingDocument(file, source),
+        });
+    };
+
+    meeting.auxiliaryFile?.forEach((file, index) => {
+        pushDocument(file, 'auxiliaryFile', `Sitzungsdokument ${index + 1}`);
+    });
+    pushDocument(meeting.invitation, 'invitation', 'Einladung');
+    pushDocument(meeting.resultsProtocol, 'resultsProtocol', 'Niederschrift');
+    pushDocument(meeting.verbatimProtocol, 'verbatimProtocol', 'Wortprotokoll');
+
+    return documents.sort((left, right) => {
+        const priorityDiff = MEETING_DOCUMENT_PRIORITY[left.category] - MEETING_DOCUMENT_PRIORITY[right.category];
+        if (priorityDiff !== 0) return priorityDiff;
+        return (left.file.name || '').localeCompare(right.file.name || '');
+    });
+};
+
+const getPaperIdFromConsultation = (consultation?: string | Consultation): string | null => {
+    if (!consultation || typeof consultation === 'string') return null;
+    if (typeof consultation.paper === 'string') return consultation.paper;
+    return consultation.paper?.id || null;
+};
+
+const buildAgendaPaperLink = (consultation?: string | Consultation): AgendaPaperLink | null => {
+    const paperId = getPaperIdFromConsultation(consultation);
+    if (!paperId) return null;
+
+    const paper =
+        consultation && typeof consultation !== 'string' && typeof consultation.paper !== 'string'
+            ? consultation.paper
+            : undefined;
+
+    return {
+        paperId,
+        href: `/papers/${encodeUrl(paperId)}`,
+        title: paper?.name,
+        reference: paper?.reference,
+    };
+};
+
 // Helper for sorting meetings chronologically
 const getMeetingTimestamp = (dateStr?: string) => {
     if (!dateStr) return -1;
@@ -88,7 +236,7 @@ const getMeetingTimestamp = (dateStr?: string) => {
     return isNaN(date.getTime()) ? -1 : date.getTime();
 };
 
-const sortMeetingsAsc = (a: Meeting, b: Meeting) => {
+const sortMeetingsAsc = (a: MeetingListItem, b: MeetingListItem) => {
     const timeA = getMeetingTimestamp(a.start);
     const timeB = getMeetingTimestamp(b.start);
     
@@ -101,7 +249,7 @@ const sortMeetingsAsc = (a: Meeting, b: Meeting) => {
     return (a.name || '').localeCompare(b.name || '');
 };
 
-const sortMeetingsDesc = (a: Meeting, b: Meeting) => {
+const sortMeetingsDesc = (a: MeetingListItem, b: MeetingListItem) => {
     const timeA = getMeetingTimestamp(a.start);
     const timeB = getMeetingTimestamp(b.start);
     
@@ -113,6 +261,62 @@ const sortMeetingsDesc = (a: Meeting, b: Meeting) => {
     if (diff !== 0) return diff;
     return (a.name || '').localeCompare(b.name || '');
 };
+
+type MeetingListItem = Pick<Meeting, 'id' | 'name' | 'start' | 'end' | 'location'>;
+
+const ARCHIVE_LIST_ITEMS_PER_PAGE = 25;
+const ARCHIVE_DEEP_SEARCH_ITEMS_PER_PAGE = 20;
+
+const matchesMeetingDate = (meeting: MeetingListItem, minDate?: string, maxDate?: string) => {
+    const date = meeting.start?.slice(0, 10);
+    if (!date) return !minDate && !maxDate;
+    if (minDate && date < minDate) return false;
+    if (maxDate && date > maxDate) return false;
+    return true;
+};
+
+const toPagedResponse = <T,>(
+    pageItems: T[],
+    currentPage: number,
+    elementsPerPage: number,
+    totalElements: number,
+): PagedResponse<T> => {
+    const totalPages = Math.max(1, Math.ceil(totalElements / elementsPerPage));
+    const safePage = Math.min(Math.max(1, currentPage), totalPages);
+
+    return {
+        data: pageItems,
+        links: {},
+        pagination: {
+            currentPage: safePage,
+            elementsPerPage,
+            totalElements,
+            totalPages,
+        },
+    };
+};
+
+const paginateItems = <T,>(items: T[], currentPage: number, elementsPerPage: number): PagedResponse<T> => {
+    const totalElements = items.length;
+    const totalPages = Math.max(1, Math.ceil(totalElements / elementsPerPage));
+    const safePage = Math.min(Math.max(1, currentPage), totalPages);
+    const offset = (safePage - 1) * elementsPerPage;
+
+    return toPagedResponse(
+        items.slice(offset, offset + elementsPerPage),
+        safePage,
+        elementsPerPage,
+        totalElements,
+    );
+};
+
+const mapArchiveIndexItemToMeetingListItem = (item: ArchiveMeetingIndexItem): MeetingListItem => ({
+    id: item.id,
+    name: item.name,
+    start: item.start || '',
+    end: item.end,
+    location: item.location,
+});
 
 // Stop words for keyword extraction
 const STOP_WORDS = new Set([
@@ -170,7 +374,8 @@ const Header: React.FC = () => {
         organizations: 'Gremien',
         archive: 'Archiv',
         search: 'Suche',
-        mcp: 'MCP Server'
+        mcp: 'MCP Server',
+        help: 'Hilfe / Informationen',
     };
 
     return (
@@ -246,7 +451,7 @@ const Sidebar: React.FC = () => (
     </nav>
 );
 
-const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     <div className="h-screen flex flex-col md:flex-row overflow-hidden bg-[#0f111a] text-gray-100 font-sans selection:bg-red-500/30">
         {/* Subtle background mesh */}
         <div className="fixed inset-0 z-0 pointer-events-none opacity-20" style={{
@@ -1113,24 +1318,68 @@ const McpGuidePage: React.FC = () => {
     );
 };
 
+export const HelpPage: React.FC = () => {
+    const sections = [
+        {
+            title: 'Über diese Anwendung',
+            body: 'RATISA ist eine auf Basis der Stadt-APIs und der OParl-Schnittstellen der Stadt Köln erstellte Anwendung. Ziel ist es, Ratsinformationen verständlicher, strukturierter und leichter zugänglich zu machen.',
+        },
+        {
+            title: 'Projektstatus und Haftung',
+            body: 'Die Anwendung befindet sich in der Testphase. Trotz sorgfältiger Entwicklung wird keine Gewähr für Vollständigkeit, Aktualität oder Fehlerfreiheit übernommen. Für Folgen aus fehlerhaften, unvollständigen oder missverstandenen Inhalten wird keine Haftung übernommen. Verbindlich bleiben die offiziellen Veröffentlichungen der Stadt Köln.',
+        },
+        {
+            title: 'Hinweis KI',
+            body: 'Für KI-gestützte Funktionen wird derzeit Gemini 2.5 Flash verwendet. KI-Ausgaben können unvollständig oder fehlerhaft sein und müssen vor jeder Weiterverwendung geprüft werden. Im Sinne der Transparenzanforderungen des EU AI Act wird der Einsatz generativer KI ausdrücklich offengelegt; KI-Ergebnisse dienen nur der Unterstützung und ersetzen keine amtliche, fachliche oder rechtliche Prüfung.',
+        },
+    ];
+
+    return (
+        <div className="animate-in fade-in duration-300 max-w-4xl mx-auto py-8">
+            <PageTitle
+                title="Hilfe / Informationen"
+                subtitle="Hinweise zur Anwendung, Datenquelle und KI-Nutzung"
+            />
+
+            <div className="grid grid-cols-1 gap-6">
+                {sections.map((section) => (
+                    <section
+                        key={section.title}
+                        className="bg-gray-800/40 border border-gray-700/50 rounded-2xl p-8 backdrop-blur-sm"
+                    >
+                        <div className="flex items-start gap-4">
+                            <div className="p-3 bg-blue-500/15 text-blue-300 rounded-xl">
+                                <InformationCircleIcon />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-white mb-3">{section.title}</h2>
+                                <p className="text-gray-300 leading-relaxed">{section.body}</p>
+                            </div>
+                        </div>
+                    </section>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 // === DASHBOARD ===
 const Dashboard: React.FC = () => {
     const now = new Date();
     const hours = now.getHours();
     const greeting = hours < 12 ? 'Guten Morgen' : hours < 18 ? 'Guten Tag' : 'Guten Abend';
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    
-    const meetingsFilter = useMemo<FilterConfig>(() => ({
-        minDate: today,
-        sortField: 'start',
-        sortDesc: false,
-        currentPage: 1,
-    }), [today]);
-    const { data: meetingsData, isLoading: meetingsLoading } = useOparlFiltered<Meeting>('meetings', meetingsFilter);
-    const { data: papersData, isLoading: papersLoading } = useOparlList<Paper>('papers', useMemo(() => new URLSearchParams({ "limit": "1" }), []));
     const { favorites } = useFavorites();
-
-    const upcomingMeetings = useMemo(() => meetingsData?.data ? [...meetingsData.data].sort(sortMeetingsAsc).slice(0, 5) : [], [meetingsData]);
+    const {
+        upcomingMeetings,
+        recentPaperCount,
+        recentPaperWindowDays,
+        meetingsLoading,
+        papersLoading,
+        meetingsError,
+        papersError,
+        refetch,
+    } = useDashboardData();
+    const nextMeetingLabel = upcomingMeetings[0] ? (formatDateOnly(upcomingMeetings[0].start) || 'Bald') : 'Keine';
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
@@ -1160,14 +1409,14 @@ const Dashboard: React.FC = () => {
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Card 
-                    title="Kommende Sitzungen" 
-                    value={meetingsLoading ? '...' : meetingsData?.pagination.totalElements || 0} 
+                    title="Nächster Termin" 
+                    value={meetingsLoading ? '...' : meetingsError ? 'Fehler' : nextMeetingLabel} 
                     icon={<CalendarDaysIcon />} 
                     gradient="from-blue-600/20 to-indigo-600/20"
                 />
                 <Card 
-                    title="Aktuelle Vorlagen" 
-                    value={papersLoading ? '...' : papersData?.pagination.totalElements || 0} 
+                    title={`Neue Vorlagen (${recentPaperWindowDays} Tage)`} 
+                    value={papersLoading ? '...' : papersError ? 'Fehler' : recentPaperCount} 
                     icon={<DocumentTextIcon />} 
                     gradient="from-emerald-600/20 to-teal-600/20"
                 />
@@ -1188,7 +1437,11 @@ const Dashboard: React.FC = () => {
                             <Link to="/meetings" className="text-sm text-red-400 hover:text-red-300 hover:underline">Alle anzeigen →</Link>
                         </div>
                         <div className="bg-gray-800/40 border border-gray-700/50 rounded-2xl overflow-hidden backdrop-blur-sm">
-                            {meetingsLoading ? <div className="p-8"><LoadingSpinner /></div> : (
+                            {meetingsLoading ? <div className="p-8"><LoadingSpinner /></div> : meetingsError ? (
+                                <div className="p-4">
+                                    <ErrorMessage message={meetingsError.message} onRetry={refetch} />
+                                </div>
+                            ) : (
                                 <div className="divide-y divide-gray-700/50">
                                     {upcomingMeetings.length > 0 ? upcomingMeetings.map(meeting => (
                                         <div key={meeting.id} className="p-4 hover:bg-white/5 transition-colors group">
@@ -1397,12 +1650,91 @@ const GenericListPage: React.FC<GenericListPageProps> = ({ resource, title, subt
     );
 };
 
-const MeetingDetailPage: React.FC = () => {
+export const MeetingDetailPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const decodedId = id ? decodeUrl(id) : null;
     const { data: meeting, isLoading, error } = useOparlItem<Meeting>(decodedId);
     const [summary, setSummary] = useState<string>("");
     const [isSummarizing, setIsSummarizing] = useState(false);
+    const [agendaPaperLinks, setAgendaPaperLinks] = useState<Record<string, AgendaPaperLink>>({});
+
+    useEffect(() => {
+        if (!meeting) {
+            setAgendaPaperLinks({});
+            return;
+        }
+
+        const directLinks: Record<string, AgendaPaperLink> = {};
+        const consultationTargets = new Map<string, string[]>();
+
+        meeting.agendaItem?.forEach((item) => {
+            if (item.public === false) return;
+
+            const directLink = buildAgendaPaperLink(item.consultation);
+            if (directLink) {
+                directLinks[item.id] = directLink;
+                return;
+            }
+
+            if (typeof item.consultation === 'string' && item.consultation) {
+                const agendaItemIds = consultationTargets.get(item.consultation) || [];
+                agendaItemIds.push(item.id);
+                consultationTargets.set(item.consultation, agendaItemIds);
+            }
+        });
+
+        setAgendaPaperLinks(directLinks);
+
+        if (consultationTargets.size === 0) return;
+
+        let isActive = true;
+        const controller = new AbortController();
+
+        void (async () => {
+            const resolvedEntries = await Promise.all(
+                Array.from(consultationTargets.entries()).map(async ([consultationUrl, agendaItemIds]) => {
+                    try {
+                        const consultation = await getItem<Consultation>(consultationUrl, controller.signal);
+                        const link = buildAgendaPaperLink(consultation);
+                        if (!link) return null;
+                        return { agendaItemIds, link };
+                    } catch (fetchError) {
+                        if (fetchError instanceof DOMException && fetchError.name === 'AbortError') return null;
+                        return null;
+                    }
+                }),
+            );
+
+            if (!isActive || controller.signal.aborted) return;
+
+            const nextLinks = { ...directLinks };
+            resolvedEntries.forEach((entry) => {
+                if (!entry) return;
+                entry.agendaItemIds.forEach((agendaItemId) => {
+                    nextLinks[agendaItemId] = entry.link;
+                });
+            });
+
+            setAgendaPaperLinks(nextLinks);
+        })();
+
+        return () => {
+            isActive = false;
+            controller.abort();
+        };
+    }, [meeting]);
+
+    const meetingDocuments = useMemo(() => {
+        return meeting ? buildMeetingDocuments(meeting) : [];
+    }, [meeting]);
+
+    const featuredMeetingDocuments = useMemo(() => {
+        return meetingDocuments.filter((document) => document.category !== 'other');
+    }, [meetingDocuments]);
+
+    const otherMeetingDocuments = useMemo(() => {
+        return meetingDocuments.filter((document) => document.category === 'other');
+    }, [meetingDocuments]);
 
     const handleSummarize = async () => {
         if (!meeting) return;
@@ -1431,13 +1763,15 @@ const MeetingDetailPage: React.FC = () => {
              
              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-8">
-                    <GeminiCard 
-                        title="KI-Zusammenfassung der Agenda" 
-                        content={summary} 
-                        isLoading={isSummarizing} 
-                        onAction={handleSummarize} 
-                        actionLabel="Agenda analysieren" 
-                    />
+                    {runtimeConfig.enableAi && (
+                        <GeminiCard 
+                            title="KI-Zusammenfassung der Agenda" 
+                            content={summary} 
+                            isLoading={isSummarizing} 
+                            onAction={handleSummarize} 
+                            actionLabel="Agenda analysieren" 
+                        />
+                    )}
 
                     <DetailSection title="Tagesordnung">
                          {meeting.agendaItem?.length ? (
@@ -1453,6 +1787,16 @@ const MeetingDetailPage: React.FC = () => {
                                                  <div className="flex flex-wrap gap-2 mt-2">
                                                     {item.public === false && <span className="inline-block text-[10px] bg-red-900/30 text-red-400 px-2 py-0.5 rounded border border-red-900/50">Nicht öffentlich</span>}
                                                     {item.result && <span className="inline-block text-[10px] bg-green-900/30 text-green-400 px-2 py-0.5 rounded border border-green-900/50">Ergebnis: {item.result}</span>}
+                                                    {item.public !== false && agendaPaperLinks[item.id] && (
+                                                        <Link
+                                                            to={agendaPaperLinks[item.id].href}
+                                                            title={agendaPaperLinks[item.id].title || agendaPaperLinks[item.id].reference || 'Verknüpfte Vorlage'}
+                                                            className="inline-flex items-center gap-1 text-[10px] bg-indigo-900/30 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/20 hover:bg-indigo-900/40 hover:text-white transition-colors"
+                                                        >
+                                                            <LinkIcon />
+                                                            <span>Vorlage öffnen</span>
+                                                        </Link>
+                                                    )}
                                                  </div>
                                              </div>
                                          </div>
@@ -1477,6 +1821,37 @@ const MeetingDetailPage: React.FC = () => {
                             </div>
                         </div>
                     </div>
+
+                    {meetingDocuments.length > 0 && (
+                        <div className="bg-gray-800/40 border border-gray-700/50 p-6 rounded-2xl backdrop-blur-sm">
+                            <h3 className="text-lg font-bold text-white mb-4">Sitzungsdokumente</h3>
+                            <div className="space-y-4">
+                                {featuredMeetingDocuments.length > 0 && (
+                                    <div className="grid grid-cols-1 gap-3">
+                                        {featuredMeetingDocuments.map((document) => (
+                                            <DownloadLink key={document.key} file={document.file} />
+                                        ))}
+                                    </div>
+                                )}
+
+                                {otherMeetingDocuments.length > 0 && (
+                                    <div className="space-y-3">
+                                        {featuredMeetingDocuments.length > 0 && (
+                                            <div className="border-t border-gray-700/50" />
+                                        )}
+                                        <p className="text-xs uppercase tracking-wide font-bold text-gray-500">
+                                            Weitere Dokumente
+                                        </p>
+                                        <div className="grid grid-cols-1 gap-3">
+                                            {otherMeetingDocuments.map((document) => (
+                                                <DownloadLink key={document.key} file={document.file} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
              </div>
         </div>
@@ -1520,13 +1895,15 @@ const PaperDetailPage: React.FC = () => {
             
              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-8">
-                    <GeminiCard 
-                        title="KI-Analyse der Dokumente" 
-                        content={summary} 
-                        isLoading={isSummarizing} 
-                        onAction={handleSummarize} 
-                        actionLabel="Dokumente analysieren" 
-                    />
+                    {runtimeConfig.enableAi && (
+                        <GeminiCard 
+                            title="KI-Analyse der Dokumente" 
+                            content={summary} 
+                            isLoading={isSummarizing} 
+                            onAction={handleSummarize} 
+                            actionLabel="Dokumente analysieren" 
+                        />
+                    )}
 
                     <DetailSection title="Basisdaten">
                         <DetailItem label="Typ">{paper.paperType}</DetailItem>
@@ -1548,7 +1925,7 @@ const PaperDetailPage: React.FC = () => {
     );
 };
 
-const PapersPage: React.FC = () => {
+export const PapersPage: React.FC = () => {
     const [pageItems, setPageItems] = useState<Paper[]>([]);
     const paperResults = usePaperResults(pageItems);
 
@@ -1628,47 +2005,553 @@ const PapersPage: React.FC = () => {
     );
 };
 
-const MeetingArchive: React.FC = () => {
-    const now = new Date();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    // Stable reference — recreating URLSearchParams on every render would cause unnecessary refetches
-    const archiveBaseParams = useMemo(() => new URLSearchParams({ "maxDate": todayStr }), [todayStr]);
+const useArchiveMeetingsData = ({
+    query,
+    minDate,
+    maxDate,
+    fallbackMaxDate,
+    currentPage,
+}: {
+    query?: string;
+    minDate?: string;
+    maxDate?: string;
+    fallbackMaxDate: string;
+    currentPage: number;
+}) => {
+    const normalizedQuery = query?.trim() || '';
+    const explicitMinDate = minDate?.trim() || undefined;
+    const explicitMaxDate = maxDate?.trim() || undefined;
+    const isHistoryMode = Boolean(normalizedQuery || explicitMinDate || explicitMaxDate);
+
+    const [snapshotItems, setSnapshotItems] = useState<MeetingListItem[]>([]);
+    const [historyIndex, setHistoryIndex] = useState<ArchiveMeetingIndexDocument | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<Error | null>(null);
+    const [reloadToken, setReloadToken] = useState(0);
+
+    const refetch = useCallback(() => {
+        if (isHistoryMode) {
+            clearArchiveMeetingIndexCache();
+        }
+        setReloadToken((token) => token + 1);
+    }, [isHistoryMode]);
+
+    useEffect(() => {
+        const controller = new AbortController();
+
+        const fetchArchiveData = async () => {
+            setIsLoading(true);
+            setError(null);
+
+            if (isHistoryMode) {
+                setHistoryIndex(null);
+            } else {
+                setSnapshotItems([]);
+            }
+
+            try {
+                if (isHistoryMode) {
+                    const nextIndex = await loadArchiveMeetingIndex(controller.signal);
+                    if (controller.signal.aborted) return;
+                    setHistoryIndex(nextIndex);
+                    setSnapshotItems([]);
+                } else {
+                    const nextSnapshot = await getListSnapshot<Meeting>('meetings', controller.signal);
+                    if (controller.signal.aborted) return;
+                    setSnapshotItems(nextSnapshot.map((item) => ({
+                        id: item.id,
+                        name: item.name,
+                        start: item.start,
+                        end: item.end,
+                        location: item.location,
+                    })));
+                    setHistoryIndex(null);
+                }
+                setIsLoading(false);
+            } catch (e) {
+                if (e instanceof DOMException && e.name === 'AbortError') return;
+                if (!controller.signal.aborted) {
+                    setError(e as Error);
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        void fetchArchiveData();
+
+        return () => controller.abort();
+    }, [isHistoryMode, reloadToken]);
+
+    const data = useMemo(() => {
+        if (isHistoryMode) {
+            if (!historyIndex) return null;
+
+            let pageResult = queryArchiveMeetingIndex(historyIndex, {
+                query: normalizedQuery,
+                minDate: explicitMinDate,
+                maxDate: explicitMaxDate,
+                offset: (currentPage - 1) * ARCHIVE_LIST_ITEMS_PER_PAGE,
+                limit: ARCHIVE_LIST_ITEMS_PER_PAGE,
+            });
+
+            const totalPages = Math.max(
+                1,
+                Math.ceil(pageResult.totalMatches / ARCHIVE_LIST_ITEMS_PER_PAGE),
+            );
+            const safePage = Math.min(Math.max(1, currentPage), totalPages);
+
+            if (safePage !== currentPage) {
+                pageResult = queryArchiveMeetingIndex(historyIndex, {
+                    query: normalizedQuery,
+                    minDate: explicitMinDate,
+                    maxDate: explicitMaxDate,
+                    offset: (safePage - 1) * ARCHIVE_LIST_ITEMS_PER_PAGE,
+                    limit: ARCHIVE_LIST_ITEMS_PER_PAGE,
+                });
+            }
+
+            return toPagedResponse(
+                pageResult.items.map(mapArchiveIndexItemToMeetingListItem),
+                safePage,
+                ARCHIVE_LIST_ITEMS_PER_PAGE,
+                pageResult.totalMatches,
+            );
+        }
+
+        if (isLoading && snapshotItems.length === 0) {
+            return null;
+        }
+
+        const filteredSnapshot = snapshotItems
+            .filter((item) => matchesMeetingDate(item, undefined, fallbackMaxDate))
+            .sort(sortMeetingsDesc);
+
+        return paginateItems(filteredSnapshot, currentPage, ARCHIVE_LIST_ITEMS_PER_PAGE);
+    }, [
+        currentPage,
+        explicitMaxDate,
+        explicitMinDate,
+        fallbackMaxDate,
+        historyIndex,
+        isLoading,
+        isHistoryMode,
+        normalizedQuery,
+        snapshotItems,
+    ]);
+
+    return {
+        data,
+        isLoading,
+        error,
+        refetch,
+        isHistoryMode,
+        historyMetadata: historyIndex?.metadata || null,
+    };
+};
+
+export const ArchiveDeepSearch: React.FC = () => {
+    const [query, setQuery] = useState('');
+    const [minDate, setMinDate] = useState('');
+    const [maxDate, setMaxDate] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [index, setIndex] = useState<ArchiveMeetingIndexDocument | null>(null);
+    const [isLoadingIndex, setIsLoadingIndex] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
+
+    const deferredQuery = useDeferredValue(query);
+    const deferredMinDate = useDeferredValue(minDate);
+    const deferredMaxDate = useDeferredValue(maxDate);
+    const validationError = useMemo(
+        () => validateDateRange(minDate || undefined, maxDate || undefined),
+        [maxDate, minDate],
+    );
+
+    const ensureIndexLoaded = useCallback(async () => {
+        if (index || isLoadingIndex) return;
+        setIsLoadingIndex(true);
+        setLoadError(null);
+        try {
+            const nextIndex = await loadArchiveMeetingIndex();
+            setIndex(nextIndex);
+        } catch (error) {
+            setLoadError(error instanceof Error ? error.message : 'Archivindex konnte nicht geladen werden.');
+        } finally {
+            setIsLoadingIndex(false);
+        }
+    }, [index, isLoadingIndex]);
+
+    const hasSearchInput = Boolean(
+        deferredQuery.trim() || deferredMinDate.trim() || deferredMaxDate.trim(),
+    );
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [maxDate, minDate, query]);
+
+    const resultPage = useMemo(() => {
+        if (!index || !hasSearchInput || validationError) {
+            return {
+                items: [] as ArchiveMeetingIndexItem[],
+                totalMatches: 0,
+                currentPage: 1,
+                totalPages: 1,
+            };
+        }
+
+        let result = queryArchiveMeetingIndex(index, {
+            query: deferredQuery,
+            minDate: deferredMinDate,
+            maxDate: deferredMaxDate,
+            offset: (currentPage - 1) * ARCHIVE_DEEP_SEARCH_ITEMS_PER_PAGE,
+            limit: ARCHIVE_DEEP_SEARCH_ITEMS_PER_PAGE,
+        });
+
+        const totalPages = Math.max(
+            1,
+            Math.ceil(result.totalMatches / ARCHIVE_DEEP_SEARCH_ITEMS_PER_PAGE),
+        );
+        const safePage = Math.min(Math.max(1, currentPage), totalPages);
+
+        if (safePage !== currentPage) {
+            result = queryArchiveMeetingIndex(index, {
+                query: deferredQuery,
+                minDate: deferredMinDate,
+                maxDate: deferredMaxDate,
+                offset: (safePage - 1) * ARCHIVE_DEEP_SEARCH_ITEMS_PER_PAGE,
+                limit: ARCHIVE_DEEP_SEARCH_ITEMS_PER_PAGE,
+            });
+        }
+
+        return {
+            ...result,
+            currentPage: safePage,
+            totalPages,
+        };
+    }, [
+        currentPage,
+        deferredMaxDate,
+        deferredMinDate,
+        deferredQuery,
+        hasSearchInput,
+        index,
+        validationError,
+    ]);
+
+    useEffect(() => {
+        if (resultPage.currentPage !== currentPage) {
+            setCurrentPage(resultPage.currentPage);
+        }
+    }, [currentPage, resultPage.currentPage]);
 
     return (
-        <GenericListPage
-            resource="meetings"
-            title="Archiv"
-            subtitle="Vergangene Sitzungen"
-            sort="-start"
-            sortItems={sortMeetingsDesc}
-            baseParams={archiveBaseParams}
-            searchPlaceholder="Im Archiv suchen..."
-            topContent={<DateRangeFilter />}
-            columnClasses={['', 'hidden md:table-cell']} 
-            renderItem={(item: Meeting | "header") => {
-                if (item === "header") return <tr><th className="p-4 pl-6">Name</th><th className="p-4 hidden md:table-cell whitespace-nowrap">Datum</th></tr>;
-                return (
-                    <tr key={item.id} className="hover:bg-white/5 border-b border-gray-700/50 last:border-0 group transition-colors">
-                        <td className="p-4 pl-6 font-medium relative pr-10">
-                             <Link to={`/meetings/${encodeUrl(item.id)}`} className="text-gray-200 hover:text-red-400 font-bold block transition-colors">{item.name}</Link>
-                             <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <FavoriteButton item={{ id: item.id, type: 'meeting', name: item.name, path: `/meetings/${encodeUrl(item.id)}`, info: formatDateTime(item.start) }} />
-                            </div>
-                        </td>
-                        <td className="p-4 hidden md:table-cell whitespace-nowrap text-gray-400 font-mono text-sm">{formatDateTime(item.start)}</td>
-                    </tr>
-                );
-            }}
-            renderCard={(item: Meeting) => (
-                <div key={item.id} className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4 flex flex-col gap-2 relative opacity-80 hover:opacity-100 transition-opacity">
-                    <div className="flex justify-between items-start">
-                        <span className="text-xs font-bold text-gray-500 bg-gray-900/20 px-2 py-1 rounded uppercase tracking-wider">{formatDateOnly(item.start)}</span>
-                         <FavoriteButton item={{ id: item.id, type: 'meeting', name: item.name, path: `/meetings/${encodeUrl(item.id)}` }} />
+        <div className="bg-gradient-to-br from-amber-900/20 to-red-900/10 border border-amber-500/20 rounded-2xl p-5 mb-6 backdrop-blur-sm">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
+                <div>
+                    <h3 className="text-sm font-bold text-gray-100 flex items-center gap-2">
+                        <ArchiveBoxIcon /> Archiv-Tiefensuche
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-1">
+                        Laedt einen kompakten Archivindex nur bei Bedarf und durchsucht alte Sitzungen separat vom normalen Listenfilter.
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => void ensureIndexLoaded()}
+                    disabled={Boolean(index) || isLoadingIndex}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-amber-900/40 disabled:text-amber-100/60 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg transition-colors"
+                >
+                    {index ? 'Index geladen' : isLoadingIndex ? 'Laedt...' : 'Tiefensuche aktivieren'}
+                </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_180px_180px] gap-3 mb-2">
+                <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500">
+                        <MagnifyingGlassIcon />
                     </div>
-                    <Link to={`/meetings/${encodeUrl(item.id)}`} className="text-lg font-bold text-gray-300 hover:text-white leading-tight mt-1">{item.name}</Link>
+                    <input
+                        type="search"
+                        value={query}
+                        onFocus={() => void ensureIndexLoaded()}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder="Alte Sitzungen, Themen oder Orte durchsuchen..."
+                        className="w-full pl-10 pr-4 py-3 bg-gray-900/60 border border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent text-white placeholder-gray-500 transition-all"
+                    />
+                </div>
+                <div>
+                    <label className="block text-[10px] uppercase text-gray-500 font-bold mb-2">Von</label>
+                    <input
+                        type="date"
+                        aria-label="Von"
+                        value={minDate}
+                        onFocus={() => void ensureIndexLoaded()}
+                        onChange={(e) => setMinDate(e.target.value)}
+                        className="w-full px-4 py-3 bg-gray-900/60 border border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent text-white transition-all"
+                    />
+                </div>
+                <div>
+                    <label className="block text-[10px] uppercase text-gray-500 font-bold mb-2">Bis</label>
+                    <input
+                        type="date"
+                        aria-label="Bis"
+                        value={maxDate}
+                        onFocus={() => void ensureIndexLoaded()}
+                        onChange={(e) => setMaxDate(e.target.value)}
+                        className="w-full px-4 py-3 bg-gray-900/60 border border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent text-white transition-all"
+                    />
+                </div>
+            </div>
+
+            <p className="text-[11px] text-amber-200/80 mb-4">
+                Nur <span className="font-semibold">Bis</span> ausfuellen, um Sitzungen vor einem Stichtag zu finden.
+            </p>
+
+            {validationError && (
+                <p className="text-xs text-red-300 bg-red-900/30 border border-red-800 rounded-md px-3 py-2 mb-4">
+                    {validationError}
+                </p>
+            )}
+
+            {loadError && (
+                <p className="text-xs text-red-300 bg-red-900/30 border border-red-800 rounded-md px-3 py-2 mb-4">
+                    {loadError}
+                </p>
+            )}
+
+            {index && (
+                <div className="flex flex-wrap gap-2 text-[11px] text-gray-400 mb-4">
+                    <span className="px-2 py-1 rounded-full bg-gray-900/60 border border-gray-700">
+                        {index.metadata.itemCount} archivierte Sitzungen
+                    </span>
+                    <span className="px-2 py-1 rounded-full bg-gray-900/60 border border-gray-700">
+                        Stand {formatDateOnly(index.metadata.generatedAt)}
+                    </span>
+                    {index.metadata.isPartial && (
+                        <span className="px-2 py-1 rounded-full bg-amber-900/30 text-amber-200 border border-amber-700/50">
+                            Teilindex: {index.metadata.stopReason || 'Quelle war nicht vollstaendig erreichbar'}
+                        </span>
+                    )}
                 </div>
             )}
-        />
+
+            {!index && !isLoadingIndex && !loadError && (
+                <p className="text-xs text-gray-500">
+                    Die Tiefensuche bleibt inaktiv, bis Sie sie explizit laden. So bleibt das normale Archiv schnell.
+                </p>
+            )}
+
+            {index && !hasSearchInput && !validationError && (
+                <p className="text-xs text-gray-500">
+                    Geben Sie einen Suchbegriff oder einen Zeitraum ein, um alte Archivsitzungen ueber den kompakten Index zu finden.
+                </p>
+            )}
+
+            {index && hasSearchInput && !validationError && (
+                <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs text-gray-400">
+                            {resultPage.totalMatches > resultPage.items.length
+                                ? `${resultPage.items.length} von ${resultPage.totalMatches} Treffern`
+                                : `${resultPage.totalMatches} Treffer`}
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setQuery('');
+                                setMinDate('');
+                                setMaxDate('');
+                                setCurrentPage(1);
+                            }}
+                            className="text-xs text-amber-300 hover:text-amber-200"
+                        >
+                            Eingaben leeren
+                        </button>
+                    </div>
+
+                    {resultPage.items.length > 0 ? (
+                        <>
+                            {resultPage.items.map((item) => (
+                                <Link
+                                    key={item.id}
+                                    to={`/meetings/${encodeUrl(item.id)}`}
+                                    className="block bg-gray-900/50 hover:bg-gray-900/80 border border-gray-700/60 rounded-xl p-4 transition-colors"
+                                >
+                                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <p className="font-bold text-white truncate">{item.name}</p>
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                {item.location || 'Ort unbekannt'}
+                                            </p>
+                                        </div>
+                                        <div className="text-xs text-amber-300 font-mono whitespace-nowrap">
+                                            {formatDateTime(item.start)}
+                                        </div>
+                                    </div>
+                                </Link>
+                            ))}
+                            <Pagination
+                                currentPage={resultPage.currentPage}
+                                totalPages={resultPage.totalPages}
+                                onPageChange={setCurrentPage}
+                            />
+                        </>
+                    ) : (
+                        <p className="text-sm text-gray-500 py-2">Keine Treffer im Archivindex gefunden.</p>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+export const MeetingArchive: React.FC = () => {
+    const location = useLocation();
+    const navigate = useNavigate();
+    const today = useMemo(() => {
+        const now = new Date();
+        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    }, []);
+    const urlParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+    const urlQuery = urlParams.get('q') || '';
+    const explicitMinDate = urlParams.get('minDate') || undefined;
+    const explicitMaxDate = urlParams.get('maxDate') || undefined;
+    const currentPage = Math.max(1, parseInt(urlParams.get('page') || '1', 10) || 1);
+    const [currentQuery, setCurrentQuery] = useState(urlQuery);
+
+    useEffect(() => {
+        setCurrentQuery((prev) => (prev === urlQuery ? prev : urlQuery));
+    }, [urlQuery]);
+
+    useEffect(() => {
+        const handler = setTimeout(() => {
+            if (currentQuery.trim() !== urlQuery.trim()) {
+                const nextParams = new URLSearchParams(location.search);
+                if (currentQuery.trim()) nextParams.set('q', currentQuery.trim());
+                else nextParams.delete('q');
+                nextParams.set('page', '1');
+                navigate({ search: nextParams.toString() }, { replace: true });
+            }
+        }, 500);
+
+        return () => clearTimeout(handler);
+    }, [currentQuery, location.search, navigate, urlQuery]);
+
+    const { data, isLoading, error, refetch, isHistoryMode, historyMetadata } = useArchiveMeetingsData({
+        query: urlQuery || undefined,
+        minDate: explicitMinDate,
+        maxDate: explicitMaxDate,
+        fallbackMaxDate: today,
+        currentPage,
+    });
+
+    const displayData = data?.data || [];
+    const hasExplicitFilters = Boolean(urlQuery || explicitMinDate || explicitMaxDate);
+
+    const handlePageChange = (page: number) => {
+        const nextParams = new URLSearchParams(location.search);
+        nextParams.set('page', String(page));
+        navigate({ search: nextParams.toString() });
+    };
+
+    return (
+        <div className="animate-in fade-in duration-300">
+            <PageTitle title="Archiv" subtitle="Vergangene Sitzungen" />
+            <ArchiveDeepSearch />
+            <DateRangeFilter />
+
+            {isHistoryMode && historyMetadata?.isPartial && (
+                <div className="mb-4 text-xs text-amber-200 bg-amber-900/20 border border-amber-700/50 rounded-xl px-4 py-3">
+                    Der Archivindex ist unvollstaendig. Ergebnisse koennen fehlen.
+                    {historyMetadata.stopReason ? ` ${historyMetadata.stopReason}` : ''}
+                </div>
+            )}
+
+            <div className="mb-6 relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                    <MagnifyingGlassIcon />
+                </div>
+                <input
+                    type="search"
+                    value={currentQuery}
+                    onChange={(e) => setCurrentQuery(e.target.value)}
+                    placeholder="Im Archiv suchen..."
+                    className="w-full pl-10 pr-4 py-3 bg-gray-800/60 border border-gray-700 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent text-white placeholder-gray-500 transition-all shadow-sm"
+                />
+            </div>
+
+            {error && <ErrorMessage message={error.message} onRetry={refetch} />}
+
+            {!isLoading && data && (
+                <p className="text-xs text-gray-500 mb-3">
+                    {data.pagination.totalElements} Ergebnisse
+                    {isHistoryMode && (
+                        <span className="ml-2 inline-flex items-center rounded-full border border-amber-700/50 bg-amber-900/20 px-2 py-0.5 text-[11px] text-amber-200">
+                            Vollarchiv
+                        </span>
+                    )}
+                    {hasExplicitFilters && (
+                        <button
+                            onClick={() => {
+                                const nextParams = new URLSearchParams();
+                                navigate({ search: nextParams.toString() });
+                                setCurrentQuery('');
+                            }}
+                            className="ml-2 text-red-400 hover:text-red-300 underline"
+                        >
+                            Filter zurücksetzen
+                        </button>
+                    )}
+                </p>
+            )}
+
+            <div className="hidden md:block bg-gray-800/40 border border-gray-700/50 rounded-2xl shadow-lg backdrop-blur-sm overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-gray-300">
+                        <thead className="bg-gray-900/50 text-gray-400 text-xs uppercase font-bold tracking-wider">
+                            <tr>
+                                <th className="p-4 pl-6">Name</th>
+                                <th className="p-4 hidden md:table-cell whitespace-nowrap">Datum</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-700/50">
+                            {isLoading && !data && <TableSkeleton columnClasses={['', 'hidden md:table-cell']} />}
+                            {displayData.map((item) => (
+                                <tr key={item.id} className="hover:bg-white/5 border-b border-gray-700/50 last:border-0 group transition-colors">
+                                    <td className="p-4 pl-6 font-medium relative pr-10">
+                                        <Link to={`/meetings/${encodeUrl(item.id)}`} className="text-gray-200 hover:text-red-400 font-bold block transition-colors">
+                                            {item.name}
+                                        </Link>
+                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <FavoriteButton item={{ id: item.id, type: 'meeting', name: item.name, path: `/meetings/${encodeUrl(item.id)}`, info: formatDateTime(item.start) }} />
+                                        </div>
+                                    </td>
+                                    <td className="p-4 hidden md:table-cell whitespace-nowrap text-gray-400 font-mono text-sm">{formatDateTime(item.start)}</td>
+                                </tr>
+                            ))}
+                            {!isLoading && data && data.data.length === 0 && (
+                                <tr><td colSpan={10} className="p-12 text-center text-gray-500">Keine Ergebnisse gefunden.</td></tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div className="md:hidden space-y-4">
+                {isLoading && !data && [1, 2, 3].map((item) => <div key={item} className="h-32 bg-gray-800/50 animate-pulse rounded-xl"></div>)}
+                {displayData.map((item) => (
+                    <div key={item.id} className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4 flex flex-col gap-2 relative opacity-80 hover:opacity-100 transition-opacity">
+                        <div className="flex justify-between items-start">
+                            <span className="text-xs font-bold text-gray-500 bg-gray-900/20 px-2 py-1 rounded uppercase tracking-wider">{formatDateOnly(item.start)}</span>
+                            <FavoriteButton item={{ id: item.id, type: 'meeting', name: item.name, path: `/meetings/${encodeUrl(item.id)}` }} />
+                        </div>
+                        <Link to={`/meetings/${encodeUrl(item.id)}`} className="text-lg font-bold text-gray-300 hover:text-white leading-tight mt-1">{item.name}</Link>
+                    </div>
+                ))}
+                {!isLoading && data && data.data.length === 0 && <div className="text-center text-gray-500 py-10">Keine Ergebnisse gefunden.</div>}
+            </div>
+
+            {data && <Pagination currentPage={data.pagination.currentPage} totalPages={data.pagination.totalPages} onPageChange={handlePageChange} />}
+        </div>
     );
 };
 
@@ -1790,7 +2673,7 @@ const SearchPage: React.FC = () => {
 
 // --- Updated Routes with RenderCard ---
 
-const MeetingsPage: React.FC = () => {
+export const MeetingsPage: React.FC = () => {
   const now = new Date();
   const todayStr = useMemo(() =>
     `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`,
@@ -1980,9 +2863,10 @@ const App: React.FC = () => {
             )}
             />} />
 
-          <Route path="/organizations" element={<OrganizationsPage />} />
+            <Route path="/organizations" element={<OrganizationsPage />} />
             
             <Route path="/mcp" element={<McpGuidePage />} />
+            <Route path="/help" element={<HelpPage />} />
         </Routes>
       </Layout>
     </Router>

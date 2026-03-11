@@ -305,19 +305,45 @@ function toApiUrl(resource: string, params: URLSearchParams): string {
     return `${BASE_URL}/${resource}?${cleanParams.toString()}`;
 }
 
+function toProxyUrl(url: string): string {
+    if (!url.startsWith('http')) return url;
+    return url.replace(/^https?:\/\/[^/]+/i, '');
+}
+
 export async function getList<T>(resource: string, params: URLSearchParams = new URLSearchParams(), signal?: AbortSignal): Promise<PagedResponse<T>> {
   const url = toApiUrl(resource, params);
   return fetchFromApi<PagedResponse<T>>(url, signal);
 }
 
 /**
- * Fetches up to `limit` (default 200) items in one call for client-side filtering.
- * The API ignores filter params (q, minDate, etc.), so we always fetch all and filter locally.
+ * Fetches a bounded first-page snapshot for UI list filtering.
+ * This intentionally restores the pre-regression behavior for list pages.
  */
-export async function getListAll<T>(resource: string, signal?: AbortSignal, limit = 200): Promise<T[]> {
+export async function getListSnapshot<T>(resource: string, signal?: AbortSignal, limit = 200): Promise<T[]> {
     const url = `${BASE_URL}/${resource}?limit=${limit}`;
     const result = await fetchFromApi<PagedResponse<T>>(url, signal);
     return result.data;
+}
+
+/**
+ * Fetches the complete paginated collection for client-side filtering.
+ * The API ignores filter params (q, minDate, etc.), so we fetch all pages and filter locally.
+ */
+export async function getListAll<T>(resource: string, signal?: AbortSignal, limit = 200): Promise<T[]> {
+    const items: T[] = [];
+    let nextUrl: string | undefined = `${BASE_URL}/${resource}?limit=${limit}`;
+
+    while (nextUrl) {
+        if (signal?.aborted) {
+            throw new DOMException('Aborted', 'AbortError');
+        }
+
+        const result = await fetchFromApi<PagedResponse<T>>(toProxyUrl(nextUrl), signal);
+        items.push(...result.data);
+        nextUrl = result.links.next ? toProxyUrl(result.links.next) : undefined;
+    }
+
+    return items;
 }
 
 export async function getItem<T>(url: string, signal?: AbortSignal): Promise<T> {
@@ -328,8 +354,7 @@ export async function getItem<T>(url: string, signal?: AbortSignal): Promise<T> 
       throw new Error(`Invalid URL for getItem: ${url}`);
   }
   // Rewrite absolute OParl URLs to relative for Vite proxy (bypasses CORS in dev)
-  const proxyUrl = url.replace('https://buergerinfo.stadt-koeln.de', '');
-  return fetchFromApi<T>(proxyUrl, signal);
+  return fetchFromApi<T>(toProxyUrl(url), signal);
 }
 
 export async function search<T>(resource: string, _query: string, page: number = 1, signal?: AbortSignal): Promise<PagedResponse<T>> {

@@ -204,6 +204,23 @@ const isRetryableGeminiError = (details: ErrorDetails): boolean =>
 const formatErrorStatus = (details: ErrorDetails) =>
   details.status ?? details.providerCode ?? details.providerStatus ?? "unknown";
 
+const formatUserFacingAiError = (
+  userMessage: string,
+  details: ErrorDetails,
+): string => {
+  const referenceParts = [
+    details.status?.toString(),
+    details.providerStatus,
+  ].filter(Boolean);
+
+  const reference =
+    referenceParts.length > 0
+      ? `\n\n*Referenz: ${referenceParts.join(" / ")}*`
+      : "";
+
+  return `⚠️ **Fehler**: ${userMessage}${reference}`;
+};
+
 // Helper function to call OpenRouter with Llama 3.3 70B
 async function callOpenRouter(prompt: string): Promise<string> {
   if (!openRouter) throw new Error("OpenRouter not initialized");
@@ -454,7 +471,7 @@ export async function askGemini(
         "Ein oder mehrere Anhänge überschreiten das Limit von 10 MB.";
     }
 
-    return `⚠️ **Fehler**: ${userMessage}\n\n*Technische Details: ${details.rawMessage || details.message}*`;
+    return formatUserFacingAiError(userMessage, details);
   }
 }
 

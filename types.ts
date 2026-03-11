@@ -76,6 +76,8 @@ export interface Membership extends OparlObject {
     endDate?: string;
 }
 
+export type OparlReference<T> = string | T;
+
 export interface Meeting extends OparlObject {
   name: string;
   start: string;
@@ -83,10 +85,10 @@ export interface Meeting extends OparlObject {
   location?: string | Location;
   organization: string[];
   participant: string[];
-  invitation?: string;
-  resultsProtocol?: string;
-  verbatimProtocol?: string;
-  auxiliaryFile?: string[];
+  invitation?: OparlReference<File>;
+  resultsProtocol?: OparlReference<File>;
+  verbatimProtocol?: OparlReference<File>;
+  auxiliaryFile?: OparlReference<File>[];
   agendaItem: AgendaItem[];
 }
 

@@ -10,14 +10,14 @@ vi.mock('../services/oparlApiService', async () => {
 
   return {
     ...actual,
-    getListAll: vi.fn(),
+    getListSnapshot: vi.fn(),
   };
 });
 
 describe('useOparlFiltered', () => {
   it('filters and sorts data client-side', async () => {
-    const getListAllMock = vi.mocked(apiService.getListAll);
-    getListAllMock.mockResolvedValue([
+    const getListSnapshotMock = vi.mocked(apiService.getListSnapshot);
+    getListSnapshotMock.mockResolvedValue([
       { id: '1', name: 'Radweg-Ausbau', reference: 'A1', date: '2025-01-05' },
       { id: '2', name: 'Radverkehr Konzept', reference: 'A2', date: '2025-03-02' },
       { id: '3', name: 'Schulbau', reference: 'B1', date: '2025-02-01' },
@@ -41,8 +41,8 @@ describe('useOparlFiltered', () => {
   });
 
   it('applies classification field filter for organizations', async () => {
-    const getListAllMock = vi.mocked(apiService.getListAll);
-    getListAllMock.mockResolvedValue([
+    const getListSnapshotMock = vi.mocked(apiService.getListSnapshot);
+    getListSnapshotMock.mockResolvedValue([
       { id: '1', name: 'Ausschuss A', classification: 'Fachausschüsse und weitere Gremien' },
       { id: '2', name: 'Fraktion A', classification: 'Fraktionen und Gruppen' },
       { id: '3', name: 'Fraktion B', classification: 'Fraktionen und Gruppen' },

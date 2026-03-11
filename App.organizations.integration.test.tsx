@@ -11,7 +11,7 @@ vi.mock('./services/oparlApiService', async () => {
 
   return {
     ...actual,
-    getListAll: vi.fn(),
+    getListSnapshot: vi.fn(),
     getList: vi.fn(),
   };
 });
@@ -113,7 +113,7 @@ function renderOrganizations(initialEntry = '/organizations') {
 describe('OrganizationsPage filters and chart interactions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(apiService.getListAll).mockResolvedValue(organizations as any[]);
+    vi.mocked(apiService.getListSnapshot).mockResolvedValue(organizations as any[]);
     vi.mocked(apiService.getList).mockResolvedValue(pagedOrganizations as any);
   });
 

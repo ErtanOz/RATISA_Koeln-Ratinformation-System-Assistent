@@ -140,6 +140,27 @@ describe("aiService", () => {
     expect(result).toContain("Der AI-Dienst ist derzeit nicht erreichbar.");
   });
 
+  it("returns sanitized user-facing errors without raw provider JSON", async () => {
+    process.env.GEMINI_API_KEY = "gemini-test-key";
+
+    googleGenerateContentMock.mockRejectedValue(
+      makeGeminiError(
+        400,
+        "API key not valid. Please pass a valid API key.",
+        "INVALID_ARGUMENT",
+      ),
+    );
+
+    const { askGemini } = await import("./aiService");
+    const result = await askGemini("ping");
+
+    expect(result).toContain("Der API-Schlüssel ist ungültig oder hat keine Berechtigung.");
+    expect(result).toContain("Referenz: 400 / INVALID_ARGUMENT");
+    expect(result).not.toContain("Technische Details");
+    expect(result).not.toContain("google.rpc");
+    expect(result).not.toContain('"error"');
+  });
+
   it("falls back to deterministic parsing when Gemini and OpenRouter both fail", async () => {
     process.env.GEMINI_API_KEY = "gemini-test-key";
     process.env.OPENROUTER_API_KEY = `sk-or-v1-${"a".repeat(64)}`;

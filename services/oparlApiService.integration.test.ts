@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchFromApi, getItem, getList, getListAll, search } from './oparlApiService';
+import { fetchFromApi, getItem, getList, getListAll, getListSnapshot, search } from './oparlApiService';
 
 function mockPagedResponse() {
   return {
@@ -100,27 +100,89 @@ describe('fetchFromApi', () => {
     expect(calledUrl).not.toContain('minDate=');
   });
 
-  it('returns full list data via getListAll() and rewrites URLs in getItem()', async () => {
+  it('returns single-page list data via getListSnapshot()', async () => {
     const listResponse = {
       data: [{ id: 'a' }, { id: 'b' }],
       links: {},
       pagination: { currentPage: 1, elementsPerPage: 2, totalElements: 2, totalPages: 1 },
     };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(listResponse), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const items = await getListSnapshot<{ id: string }>('meetings');
+
+    expect(items).toEqual([{ id: 'a' }, { id: 'b' }]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toBe(
+      '/oparl/bodies/stadtverwaltung_koeln/meetings?limit=200',
+    );
+  });
+
+  it('follows paginated getListAll() links and rewrites absolute next URLs to the proxy path', async () => {
+    const page1 = {
+      data: [{ id: 'a' }, { id: 'b' }],
+      links: {
+        next: 'https://buergerinfo.stadt-koeln.de/oparl/bodies/stadtverwaltung_koeln/meetings?page=2&limit=201',
+      },
+      pagination: { currentPage: 1, elementsPerPage: 2, totalElements: 4, totalPages: 2 },
+    };
+    const page2 = {
+      data: [{ id: 'c' }, { id: 'd' }],
+      links: {},
+      pagination: { currentPage: 2, elementsPerPage: 2, totalElements: 4, totalPages: 2 },
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(page1), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(page2), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const items = await getListAll<{ id: string }>('meetings', undefined, 201);
+
+    expect(items).toEqual([{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(String(fetchMock.mock.calls[0][0])).toBe(
+      '/oparl/bodies/stadtverwaltung_koeln/meetings?limit=201',
+    );
+    expect(String(fetchMock.mock.calls[1][0])).toBe(
+      '/oparl/bodies/stadtverwaltung_koeln/meetings?page=2&limit=201',
+    );
+  });
+
+  it('rewrites absolute URLs in getItem()', async () => {
     const detailResponse = { id: 'detail-id', name: 'Detail' };
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(listResponse), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(detailResponse), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
 
-    const items = await getListAll<{ id: string }>('meetings');
     const detail = await getItem<typeof detailResponse>(
       'https://buergerinfo.stadt-koeln.de/oparl/meetings/123',
     );
 
-    expect(items).toEqual([{ id: 'a' }, { id: 'b' }]);
     expect(detail).toEqual(detailResponse);
-    expect(String(fetchMock.mock.calls[1][0])).toBe('/oparl/meetings/123');
+    expect(String(fetchMock.mock.calls[0][0])).toBe('/oparl/meetings/123');
+  });
+
+  it('aborts getListAll() pagination before requesting the next page', async () => {
+    const controller = new AbortController();
+    const page1 = {
+      data: [{ id: 'a' }],
+      links: {
+        next: 'https://buergerinfo.stadt-koeln.de/oparl/bodies/stadtverwaltung_koeln/meetings?page=2&limit=202',
+      },
+      pagination: { currentPage: 1, elementsPerPage: 1, totalElements: 2, totalPages: 2 },
+    };
+    const fetchMock = vi.fn().mockImplementationOnce(() => {
+      controller.abort();
+      return Promise.resolve(new Response(JSON.stringify(page1), { status: 200 }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getListAll<{ id: string }>('meetings', controller.signal, 202)).rejects.toThrow('Aborted');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('validates invalid getItem() URLs and supports search paging', async () => {
