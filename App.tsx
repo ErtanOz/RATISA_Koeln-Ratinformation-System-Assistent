@@ -2709,24 +2709,24 @@ const App: React.FC = () => {
             renderItem={(item: Person | "header") => {
                 if (item === "header") return <tr><th className="p-4 pl-6">Name</th><th className="p-4 hidden sm:table-cell">Anrede</th></tr>;
                 return (
-                    <tr key={item.id} className="hover:bg-white/5 border-b border-gray-700/50 last:border-0 group transition-colors">
+                    <tr key={item.id} className="group border-b border-app-border last:border-0 transition-colors hover:bg-app-surface-alt/60">
                         <td className="p-4 pl-6 font-medium relative pr-10">
-                            <span className="text-gray-200 font-bold">{item.name}</span>
+                            <span className="text-app-text font-bold">{item.name}</span>
                             <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <FavoriteButton item={{ id: item.id, type: 'person', name: item.name, path: `/people`, info: item.formOfAddress }} />
                             </div>
                         </td>
-                        <td className="p-4 hidden sm:table-cell text-gray-400">{item.formOfAddress}</td>
+                        <td className="p-4 hidden sm:table-cell text-app-muted">{item.formOfAddress}</td>
                     </tr>
                 );
             }}
             renderCard={(item: Person) => (
-                <div key={item.id} className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4 flex items-center justify-between">
+                <div key={item.id} className="bg-app-surface border border-app-border rounded-xl p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center text-gray-400 text-lg">👤</div>
+                        <div className="w-10 h-10 rounded-full bg-app-surface-alt flex items-center justify-center text-app-muted text-lg">👤</div>
                         <div>
-                            <p className="text-white font-bold">{item.name}</p>
-                            <p className="text-xs text-gray-500">{item.formOfAddress}</p>
+                            <p className="text-app-text font-bold">{item.name}</p>
+                            <p className="text-xs text-app-muted">{item.formOfAddress}</p>
                         </div>
                     </div>
                     <FavoriteButton item={{ id: item.id, type: 'person', name: item.name, path: `/people` }} />

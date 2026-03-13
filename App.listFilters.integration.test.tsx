@@ -1,8 +1,8 @@
 import type { ReactElement } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MeetingsPage, PapersPage } from './App';
+import App, { MeetingsPage, PapersPage } from './App';
 import { MeetingArchive } from './routes/MeetingArchivePage';
 import * as apiService from './services/oparlApiService';
 import * as archiveService from './services/archiveDeepSearchService';
@@ -255,5 +255,29 @@ describe('List page filter regressions', () => {
 
     expect(screen.getAllByText('Stabile Sitzung').length).toBeGreaterThan(0);
     expect(apiService.getListAll).not.toHaveBeenCalled();
+  });
+
+  it('renders the people list with theme-aware text classes in light mode', async () => {
+    vi.mocked(apiService.getListSnapshot).mockResolvedValue([
+      { id: 'person-1', name: 'Fabio Milhoes', formOfAddress: 'Herr' },
+      { id: 'person-2', name: 'Mariele Hotze', formOfAddress: 'Frau' },
+    ] as any[]);
+
+    window.history.pushState({}, '', '/people');
+
+    render(<App />);
+
+    expect(await screen.findByRole('heading', { name: 'Personen' })).toBeInTheDocument();
+    expect(screen.getByRole('searchbox')).toHaveAttribute('placeholder', 'Name suchen...');
+    expect(screen.getAllByText('Fabio Milhoes').length).toBeGreaterThan(0);
+
+    const table = screen.getByRole('table');
+    const tableName = within(table).getByText('Fabio Milhoes');
+    const tableAddress = within(table).getByText('Herr');
+
+    expect(tableName).toHaveClass('text-app-text');
+    expect(tableName).not.toHaveClass('text-gray-200');
+    expect(tableAddress).toHaveClass('text-app-muted');
+    expect(apiService.getListSnapshot).toHaveBeenCalledWith('people', expect.any(AbortSignal));
   });
 });
