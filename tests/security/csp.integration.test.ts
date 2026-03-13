@@ -15,7 +15,7 @@ describe("CSP-compatible theme bootstrap", () => {
     expect(indexHtml).not.toContain("document.documentElement.dataset.theme");
   });
 
-  it("keeps a strict self-only script policy in both deployment configs", async () => {
+  it("keeps a strict script policy and allows the production embedding host", async () => {
     const [netlifyConfig, nginxConfig] = await Promise.all([
       readFile(path.join(repoRoot, "netlify.toml"), "utf-8"),
       readFile(path.join(repoRoot, "deploy", "nginx", "ratisa.conf"), "utf-8"),
@@ -26,5 +26,11 @@ describe("CSP-compatible theme bootstrap", () => {
 
     expect(nginxConfig).toContain("script-src 'self'");
     expect(nginxConfig).not.toContain("script-src 'self' 'unsafe-inline'");
+
+    expect(netlifyConfig).toContain("frame-ancestors 'self' https://digitalheritagelab.com");
+    expect(netlifyConfig).not.toContain("X-Frame-Options");
+
+    expect(nginxConfig).toContain("frame-ancestors 'self' https://digitalheritagelab.com");
+    expect(nginxConfig).not.toContain("X-Frame-Options");
   });
 });
