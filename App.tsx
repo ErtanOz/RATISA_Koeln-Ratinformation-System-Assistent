@@ -2042,7 +2042,6 @@ export const PapersPage: React.FC = () => {
                     topContent={
                         <>
                             <TrendingTopics />
-                            <DateRangeFilter />
                         </>
                     }
                     columnClasses={['', 'hidden md:table-cell', 'hidden lg:table-cell']} 

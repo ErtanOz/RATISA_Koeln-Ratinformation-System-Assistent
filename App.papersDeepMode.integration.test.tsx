@@ -94,7 +94,7 @@ describe('PapersPage deep mode', () => {
 
     expect(screen.getAllByText('Aktuelle Vorlage').length).toBeGreaterThan(0);
     expect(screen.getByPlaceholderText('Vorlage suchen...')).toBeInTheDocument();
-    expect(screen.getByText('Zeitraum filtern')).toBeInTheDocument();
+    expect(screen.queryByText('Zeitraum filtern')).not.toBeInTheDocument();
     expect(paperSearchService.loadPaperSearchIndex).not.toHaveBeenCalled();
   });
 
@@ -115,7 +115,7 @@ describe('PapersPage deep mode', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Eingaben leeren' }));
 
     await waitFor(() => expect(screen.getByPlaceholderText('Vorlage suchen...')).toBeInTheDocument());
-    await waitFor(() => expect(screen.getByText('Zeitraum filtern')).toBeInTheDocument());
+    expect(screen.queryByText('Zeitraum filtern')).not.toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByText('Aktuelle Vorlage').length).toBeGreaterThan(0));
     expect(screen.queryByText('Historische Vorlage Altbau')).not.toBeInTheDocument();
   });
