@@ -5,6 +5,7 @@ import {
   ListToolsRequestSchema,
   Tool,
 } from "@modelcontextprotocol/sdk/types.js";
+import { loadPaperSearchIndex, queryPaperSearchIndex } from "./paperSearchIndex.js";
 
 const BASE_URL =
   "https://buergerinfo.stadt-koeln.de/oparl/bodies/stadtverwaltung_koeln";
@@ -424,35 +425,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const typeFilter =
         typeof safeArgs.type === "string" ? safeArgs.type.trim().toLowerCase() : "";
       const pagination = normalizePagination(safeArgs);
-
-      const payload = await fetchOparl("papers", {
-        limit: String(FETCH_PAGE_SIZE),
-        sort: "-date",
+      const index = await loadPaperSearchIndex();
+      const result = queryPaperSearchIndex(index, {
+        query,
+        paperType: typeFilter || undefined,
+        offset: (pagination.page - 1) * pagination.limit,
+        limit: pagination.limit,
       });
-
-      const filtered = readDataArray(payload)
-        .filter((paper) =>
-          includesAnyField(query, [paper?.name, paper?.reference, paper?.paperType])
-        )
-        .filter((paper) => {
-          if (!typeFilter) {
-            return true;
-          }
-          const paperType = String(paper?.paperType ?? "").toLowerCase();
-          return paperType.includes(typeFilter);
-        })
-        .sort((a, b) =>
-          String(b?.date ?? "").localeCompare(String(a?.date ?? ""))
-        )
-        .map(simplifyPaper);
-
-      const result = paginate(filtered, pagination.page, pagination.limit);
       console.error(
-        `[MCP] Papers filtered=${filtered.length}, returned=${result.length}`
+        `[MCP] Papers filtered=${result.totalMatches}, returned=${result.items.length}`
       );
 
       return {
-        content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+        content: [{ type: "text", text: JSON.stringify(result.items, null, 2) }],
       };
     }
 

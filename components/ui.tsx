@@ -49,6 +49,38 @@ export const BuildingLibraryIcon = () => (
   </svg>
 );
 
+export const ComputerDesktopIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 4.5h10.5A2.25 2.25 0 0119.5 6.75v6a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 12.75v-6A2.25 2.25 0 016.75 4.5z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 19.5h9M10 15.75v3.75m4-3.75v3.75" />
+  </svg>
+);
+
+export const LightBulbIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.7} stroke="currentColor" className="w-6 h-6">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.75a6 6 0 00-3.78 10.66c.67.55 1.07 1.36 1.12 2.22h5.32c.05-.86.45-1.67 1.12-2.22A6 6 0 0012 3.75z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 18h4.5M10.5 20.25h3" />
+  </svg>
+);
+
+export const SunIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.7} stroke="currentColor" className="w-5 h-5">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3.75v1.5m0 13.5v1.5m8.25-8.25h-1.5M5.25 12h-1.5m13.864 5.864l-1.06-1.06M7.446 7.446l-1.06-1.06m11.228 0l-1.06 1.06M7.446 16.554l-1.06 1.06M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+
+export const MoonIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.7} stroke="currentColor" className="w-5 h-5">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3a7.5 7.5 0 009.79 9.79z" />
+  </svg>
+);
+
+export const MapIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75v10.5m6-9v10.5m-10.5 1.5 4.07-1.628a1.5 1.5 0 011.114 0l4.632 1.853a1.5 1.5 0 001.114 0L19.5 18.75V4.5l-4.07 1.628a1.5 1.5 0 01-1.114 0L9.684 4.275a1.5 1.5 0 00-1.114 0L4.5 5.25v14.25z" />
+  </svg>
+);
+
 export const LinkIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
     <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
@@ -90,8 +122,9 @@ export const StarIconSolid = () => (
 // --- COMPONENTS ---
 
 export const LoadingSpinner: React.FC = () => (
-  <div className="flex justify-center items-center p-8">
-    <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-red-500 shadow-lg shadow-red-500/20"></div>
+  <div className="flex justify-center items-center p-8" role="status" aria-live="polite" aria-label="Wird geladen">
+    <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-t-2 border-app-accent shadow-lg shadow-black/10"></div>
+    <span className="sr-only">Wird geladen</span>
   </div>
 );
 
@@ -143,18 +176,19 @@ export const ErrorDisplay: React.FC<ErrorDisplayProps> = ({ error, onRetry }) =>
     }
 
     return (
-        <div className="bg-red-900/20 border border-red-500/30 text-red-200 px-6 py-5 rounded-xl shadow-lg flex flex-col md:flex-row items-center md:items-start gap-4 animate-in fade-in slide-in-from-top-2 mx-auto max-w-2xl my-6">
-            <div className="flex-shrink-0 text-red-400 bg-red-900/30 p-3 rounded-full">
+        <div className="mx-auto my-6 flex max-w-2xl animate-in flex-col items-center gap-4 rounded-xl border border-app-danger/25 bg-app-danger/10 px-6 py-5 text-app-danger shadow-lg shadow-black/10 fade-in slide-in-from-top-2 md:flex-row md:items-start">
+            <div className="flex-shrink-0 rounded-full bg-app-danger/10 p-3 text-app-danger">
                 {icon}
             </div>
             <div className="flex-1 text-center md:text-left">
-                <strong className="font-bold block mb-1 text-red-100 text-lg">{title}</strong>
-                <span className="block text-sm text-red-200/80 leading-relaxed mb-4 md:mb-0">{message}</span>
+                <strong className="mb-1 block text-lg font-bold text-app-text">{title}</strong>
+                <span className="mb-4 block text-sm leading-relaxed text-app-danger md:mb-0">{message}</span>
             </div>
             {onRetry && (
                 <button
+                    type="button"
                     onClick={onRetry}
-                    className="flex-shrink-0 px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg transition-all shadow-md hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-900 whitespace-nowrap"
+                    className="app-button-primary flex-shrink-0 whitespace-nowrap"
                 >
                     Erneut versuchen
                 </button>
@@ -173,16 +207,16 @@ interface CardProps {
   icon: React.ReactNode;
   gradient?: string;
 }
-export const Card: React.FC<CardProps> = ({ title, value, icon, gradient = "from-gray-800 to-gray-800" }) => (
-  <div className={`relative overflow-hidden border border-gray-700/50 rounded-2xl p-6 shadow-xl bg-gradient-to-br ${gradient} hover:scale-[1.02] transition-transform duration-300`}>
-    <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4 scale-150">
+export const Card: React.FC<CardProps> = ({ title, value, icon, gradient = "from-app-surface-alt to-app-surface" }) => (
+  <div className={`relative overflow-hidden rounded-2xl border border-app-border bg-gradient-to-br ${gradient} p-6 shadow-sm shadow-black/10 transition-transform duration-300 hover:scale-[1.01]`}>
+    <div className="pointer-events-none absolute right-0 top-0 translate-x-1/4 -translate-y-1/4 scale-150 p-4 opacity-10">
         {icon}
     </div>
     <div className="relative z-10 flex items-center">
-      <div className="p-3.5 rounded-xl bg-white/10 text-white shadow-inner backdrop-blur-sm">{icon}</div>
+      <div className="rounded-xl bg-app-accent/10 p-3.5 text-app-accent shadow-inner">{icon}</div>
       <div className="ml-5">
-        <p className="text-xs font-bold text-gray-300 uppercase tracking-wider mb-1">{title}</p>
-        <p className="text-3xl font-extrabold text-white tracking-tight">{value}</p>
+        <p className="mb-1 text-xs font-bold uppercase tracking-[0.18em] text-app-muted">{title}</p>
+        <p className="text-3xl font-semibold tracking-tight text-app-text">{value}</p>
       </div>
     </div>
   </div>
@@ -191,11 +225,11 @@ export const Card: React.FC<CardProps> = ({ title, value, icon, gradient = "from
 export const TableSkeleton: React.FC<{ columnClasses: string[], rowCount?: number }> = ({ columnClasses, rowCount = 8 }) => (
     <>
         {Array.from({ length: rowCount }).map((_, rIdx) => (
-            <tr key={rIdx} className="border-b border-gray-700/50 last:border-0 animate-pulse">
+            <tr key={rIdx} className="animate-pulse border-b border-app-border last:border-0">
                 {columnClasses.map((cls, cIdx) => (
                     <td key={cIdx} className={`p-4 align-middle ${cls}`}>
                         <div 
-                            className="h-4 bg-gray-700/40 rounded-full" 
+                            className="h-4 rounded-full bg-app-surface-alt" 
                             style={{ width: (rIdx + cIdx) % 3 === 0 ? '60%' : (rIdx + cIdx) % 3 === 1 ? '80%' : '40%' }}
                         ></div>
                     </td>
@@ -225,46 +259,53 @@ export const Pagination: React.FC<{ currentPage: number, totalPages: number, onP
     };
 
     return (
-        <div className="flex justify-center items-center space-x-2 mt-8 py-4">
+        <nav className="mt-8 flex items-center justify-center space-x-2 py-4" aria-label="Seitennavigation">
             <button
+                type="button"
                 onClick={() => onPageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="rounded-lg border border-app-border bg-app-surface px-3 py-2 text-app-text transition-colors hover:bg-app-surface-alt disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Vorherige Seite"
             >
                 ←
             </button>
             {getPageNumbers().map((page, index) => (
                 <button
                     key={index}
+                    type="button"
                     onClick={() => typeof page === 'number' && onPageChange(page)}
                     disabled={typeof page !== 'number'}
                     className={`min-w-[40px] px-3 py-2 rounded-lg font-medium transition-all ${
                         page === currentPage
-                            ? 'bg-red-600 text-white shadow-lg shadow-red-900/30 transform scale-105'
+                            ? 'scale-105 bg-app-accent text-white shadow-sm shadow-black/10'
                             : typeof page === 'number'
-                                ? 'bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700 hover:border-gray-600'
-                                : 'text-gray-500 cursor-default'
+                                ? 'border border-app-border bg-app-surface text-app-text hover:bg-app-surface-alt'
+                                : 'cursor-default text-app-muted'
                     }`}
+                    aria-label={typeof page === 'number' ? `Seite ${page}` : 'Weitere Seiten'}
+                    aria-current={page === currentPage ? 'page' : undefined}
                 >
                     {page}
                 </button>
             ))}
             <button
+                type="button"
                 onClick={() => onPageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className="px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="rounded-lg border border-app-border bg-app-surface px-3 py-2 text-app-text transition-colors hover:bg-app-surface-alt disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Nächste Seite"
             >
                 →
             </button>
-        </div>
+        </nav>
     );
 };
 
 export const PageTitle: React.FC<{ title: string, subtitle?: string, actions?: React.ReactNode }> = ({ title, subtitle, actions }) => (
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-8 pb-4 border-b border-gray-800">
+    <div className="mb-8 flex flex-col items-start justify-between gap-4 border-b border-app-border pb-4 md:flex-row md:items-end">
         <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">{title}</h1>
-            {subtitle && <p className="text-gray-400 mt-1 text-sm md:text-base">{subtitle}</p>}
+            <h1 className="text-2xl font-semibold tracking-tight text-app-text md:text-3xl">{title}</h1>
+            {subtitle && <p className="mt-1 text-sm text-app-muted md:text-base">{subtitle}</p>}
         </div>
         {actions && <div className="flex-shrink-0">{actions}</div>}
     </div>
@@ -272,20 +313,20 @@ export const PageTitle: React.FC<{ title: string, subtitle?: string, actions?: R
 
 export const DetailSection: React.FC<{ title: string, children: React.ReactNode }> = ({ title, children }) => (
     <section className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-            <span className="w-1 h-6 bg-red-600 rounded-full inline-block"></span>
+        <h3 className="mb-4 flex items-center gap-2 text-lg font-semibold text-app-text">
+            <span className="inline-block h-6 w-1 rounded-full bg-app-accent"></span>
             {title}
         </h3>
-        <div className="bg-gray-800/20 rounded-2xl p-1">{children}</div>
+        <div className="app-surface p-1">{children}</div>
     </section>
 );
 
 export const DetailItem: React.FC<{ label: string, children: React.ReactNode }> = ({ label, children }) => {
     if (!children) return null;
     return (
-        <div className="py-3 px-2 border-b border-gray-800 last:border-0 flex flex-col sm:flex-row sm:justify-between gap-1">
-            <span className="text-gray-500 font-medium text-sm">{label}</span>
-            <span className="text-gray-200 font-medium text-right">{children}</span>
+        <div className="flex flex-col gap-1 border-b border-app-border px-2 py-3 last:border-0 sm:flex-row sm:justify-between">
+            <span className="text-sm font-medium text-app-muted">{label}</span>
+            <span className="text-right font-medium text-app-text">{children}</span>
         </div>
     );
 };
@@ -295,19 +336,19 @@ export const DownloadLink: React.FC<{ file: OparlFile }> = ({ file }) => (
         href={file.accessUrl} // Note: This will likely need a proxy or backend in real world due to CORS
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center p-4 bg-gray-800/60 hover:bg-gray-700 border border-gray-700 rounded-xl transition-all hover:shadow-lg group"
+        className="group flex items-center rounded-xl border border-app-border bg-app-surface px-4 py-4 transition-colors hover:bg-app-surface-alt"
     >
-        <div className="p-3 bg-red-900/20 text-red-500 rounded-lg mr-4 group-hover:scale-110 transition-transform">
+        <div className="mr-4 rounded-lg bg-app-accent/10 p-3 text-app-accent transition-transform group-hover:scale-110">
             <DocumentTextIcon />
         </div>
         <div className="flex-1 min-w-0">
-            <p className="font-bold text-gray-200 truncate group-hover:text-red-400 transition-colors">{file.name || 'Dokument'}</p>
-            <div className="flex gap-2 text-xs text-gray-500 mt-0.5">
+            <p className="truncate font-semibold text-app-text transition-colors group-hover:text-app-accent">{file.name || 'Dokument'}</p>
+            <div className="mt-0.5 flex gap-2 text-xs text-app-muted">
                 <span className="uppercase">{file.mimeType.split('/')[1] || 'Datei'}</span>
                 {file.size && <span>• {(file.size / 1024).toFixed(1)} KB</span>}
             </div>
         </div>
-        <div className="text-gray-600 group-hover:text-white transition-colors">
+        <div className="text-app-muted transition-colors group-hover:text-app-text">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
@@ -320,14 +361,14 @@ const MarkdownRenderer: React.FC<{ content: string }> = ({ content }) => {
     // Very basic markdown parser to avoid external dependencies
     const lines = content.split('\n');
     return (
-        <div className="space-y-2 text-sm leading-relaxed text-gray-300">
+        <div className="space-y-2 text-sm leading-relaxed text-app-text">
             {lines.map((line, i) => {
-                if (line.startsWith('### ')) return <h4 key={i} className="text-white font-bold text-base mt-4 mb-2">{line.replace('### ', '')}</h4>;
-                if (line.startsWith('## ')) return <h3 key={i} className="text-white font-bold text-lg mt-6 mb-3 border-b border-gray-700 pb-1">{line.replace('## ', '')}</h3>;
+                if (line.startsWith('### ')) return <h4 key={i} className="mt-4 mb-2 text-base font-bold text-app-text">{line.replace('### ', '')}</h4>;
+                if (line.startsWith('## ')) return <h3 key={i} className="mt-6 mb-3 border-b border-app-border pb-1 text-lg font-bold text-app-text">{line.replace('## ', '')}</h3>;
                 if (line.startsWith('* ') || line.startsWith('- ')) {
                     return (
-                        <div key={i} className="flex gap-2 ml-1">
-                            <span className="text-indigo-400 mt-1.5">•</span>
+                        <div key={i} className="ml-1 flex gap-2">
+                            <span className="mt-1.5 text-app-info">•</span>
                             <span dangerouslySetInnerHTML={{ __html: parseBold(line.substring(2)) }}></span>
                         </div>
                     );
@@ -351,7 +392,7 @@ const escapeHtml = (text: string) => (
 // Helper for simple bold parsing (**text**) with HTML escaping to avoid XSS.
 export const parseBold = (text: string) => {
     const escaped = escapeHtml(text);
-    return escaped.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>');
+    return escaped.replace(/\*\*(.*?)\*\*/g, '<strong class="text-app-text font-semibold">$1</strong>');
 };
 
 export const GeminiCard: React.FC<{ 
@@ -361,35 +402,36 @@ export const GeminiCard: React.FC<{
     onAction?: () => void;
     actionLabel?: string;
 }> = ({ title, content, isLoading, onAction, actionLabel }) => (
-    <div className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 border border-indigo-500/30 rounded-2xl p-6 shadow-xl relative overflow-hidden group">
-        <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+    <div className="group relative overflow-hidden rounded-2xl border border-app-info/20 bg-app-info/10 p-6 shadow-sm shadow-black/10">
+        <div className="absolute top-0 right-0 p-3 opacity-10 transition-opacity group-hover:opacity-20">
             <SparklesIcon />
         </div>
         
-        <div className="flex justify-between items-start mb-4 relative z-10">
-            <h3 className="font-bold text-indigo-100 flex items-center gap-2">
-                <span className="text-indigo-400"><SparklesIcon /></span> {title}
+        <div className="relative z-10 mb-4 flex items-start justify-between">
+            <h3 className="flex items-center gap-2 font-semibold text-app-text">
+                <span className="text-app-info"><SparklesIcon /></span> {title}
             </h3>
         </div>
 
         <div className="relative z-10">
             {isLoading ? (
                 <div className="space-y-3 animate-pulse">
-                    <div className="h-4 bg-indigo-500/20 rounded w-3/4"></div>
-                    <div className="h-4 bg-indigo-500/20 rounded w-full"></div>
-                    <div className="h-4 bg-indigo-500/20 rounded w-5/6"></div>
+                    <div className="h-4 w-3/4 rounded bg-app-info/20"></div>
+                    <div className="h-4 w-full rounded bg-app-info/20"></div>
+                    <div className="h-4 w-5/6 rounded bg-app-info/20"></div>
                 </div>
             ) : content ? (
-                <div className="bg-gray-900/40 rounded-xl p-4 border border-indigo-500/10">
+                <div className="rounded-xl border border-app-info/10 bg-app-surface p-4">
                     <MarkdownRenderer content={content} />
                 </div>
             ) : (
-                <div className="text-center py-6">
-                    <p className="text-indigo-200/60 text-sm mb-4">Lassen Sie die KI diesen Inhalt analysieren und zusammenfassen.</p>
+                <div className="py-6 text-center">
+                    <p className="mb-4 text-sm text-app-muted">Lassen Sie die KI diesen Inhalt analysieren und zusammenfassen.</p>
                     {onAction && (
                         <button 
+                            type="button"
                             onClick={onAction}
-                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold shadow-lg shadow-indigo-900/20 transition-all hover:scale-105"
+                            className="app-button-info"
                         >
                             {actionLabel || 'Analysieren'}
                         </button>
@@ -403,9 +445,11 @@ export const GeminiCard: React.FC<{
 export const FavoriteButton: React.FC<{ item: FavoriteItem, className?: string }> = ({ item, className }) => {
     const { isFavorite, toggleFavorite } = useFavorites();
     const active = isFavorite(item.id);
+    const actionLabel = active ? 'Von Merkliste entfernen' : 'Auf Merkliste setzen';
 
     return (
         <button
+            type="button"
             onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -413,10 +457,12 @@ export const FavoriteButton: React.FC<{ item: FavoriteItem, className?: string }
             }}
             className={`p-2 rounded-lg transition-all duration-200 ${
                 active 
-                    ? 'text-yellow-400 hover:text-yellow-300 bg-yellow-400/10' 
-                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                    ? 'bg-app-warning/10 text-app-warning hover:text-app-warning' 
+                    : 'text-app-muted hover:bg-app-surface-alt hover:text-app-text'
             } ${className}`}
-            title={active ? "Von Merkliste entfernen" : "Auf Merkliste setzen"}
+            title={actionLabel}
+            aria-label={`${actionLabel}: ${item.name}`}
+            aria-pressed={active}
         >
             {active ? <StarIconSolid /> : <StarIcon />}
         </button>

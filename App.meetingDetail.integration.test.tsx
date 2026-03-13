@@ -2,7 +2,7 @@ import type { ReactElement } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MeetingDetailPage } from './App';
+import { MeetingDetailPage } from './routes/MeetingDetailPage';
 import * as apiService from './services/oparlApiService';
 
 vi.mock('./services/oparlApiService', async () => {

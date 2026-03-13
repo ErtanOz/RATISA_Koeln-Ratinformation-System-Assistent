@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 export interface FavoriteItem {
     id: string;
@@ -10,34 +10,126 @@ export interface FavoriteItem {
 }
 
 const STORAGE_KEY = 'oparl_favorites';
-const EVENT_KEY = 'favorites-updated';
+const FAVORITE_TYPES = new Set<FavoriteItem['type']>([
+    'meeting',
+    'paper',
+    'person',
+    'organization',
+]);
+
+type Listener = () => void;
+
+const listeners = new Set<Listener>();
+
+let cachedFavorites: FavoriteItem[] | null = null;
+let cachedStorageValue: string | null | undefined;
+let hasBoundStorageListener = false;
+
+function isFavoriteItem(value: unknown): value is FavoriteItem {
+    if (!value || typeof value !== 'object') return false;
+
+    const candidate = value as Partial<FavoriteItem>;
+    return (
+        typeof candidate.id === 'string' &&
+        typeof candidate.name === 'string' &&
+        typeof candidate.path === 'string' &&
+        typeof candidate.type === 'string' &&
+        FAVORITE_TYPES.has(candidate.type as FavoriteItem['type']) &&
+        (candidate.info === undefined || typeof candidate.info === 'string')
+    );
+}
+
+function normalizeFavorites(value: unknown): FavoriteItem[] {
+    if (!Array.isArray(value)) return [];
+
+    const seen = new Set<string>();
+    const favorites: FavoriteItem[] = [];
+
+    value.forEach((entry) => {
+        if (!isFavoriteItem(entry) || seen.has(entry.id)) return;
+        seen.add(entry.id);
+        favorites.push(entry);
+    });
+
+    return favorites;
+}
+
+function parseFavorites(rawValue: string | null): FavoriteItem[] {
+    try {
+        if (!rawValue) return [];
+        return normalizeFavorites(JSON.parse(rawValue));
+    } catch (error) {
+        console.error('Failed to parse favorites', error);
+        return [];
+    }
+}
+
+function getFavoritesSnapshot(): FavoriteItem[] {
+    if (typeof window === 'undefined') return [];
+
+    const rawValue = localStorage.getItem(STORAGE_KEY);
+    if (cachedFavorites !== null && rawValue === cachedStorageValue) {
+        return cachedFavorites;
+    }
+
+    cachedStorageValue = rawValue;
+    cachedFavorites = parseFavorites(rawValue);
+    return cachedFavorites;
+}
+
+function notifyListeners() {
+    listeners.forEach((listener) => listener());
+}
+
+function syncFavoritesFromStorage() {
+    if (typeof window === 'undefined') {
+        cachedStorageValue = null;
+        cachedFavorites = [];
+    } else {
+        cachedStorageValue = localStorage.getItem(STORAGE_KEY);
+        cachedFavorites = parseFavorites(cachedStorageValue);
+    }
+    notifyListeners();
+}
+
+function ensureStorageListener() {
+    if (typeof window === 'undefined' || hasBoundStorageListener) return;
+
+    window.addEventListener('storage', (event) => {
+        if (event.key && event.key !== STORAGE_KEY) return;
+        syncFavoritesFromStorage();
+    });
+
+    hasBoundStorageListener = true;
+}
+
+function subscribe(listener: Listener) {
+    listeners.add(listener);
+    ensureStorageListener();
+
+    return () => {
+        listeners.delete(listener);
+    };
+}
+
+function persistFavorites(nextFavorites: FavoriteItem[]) {
+    const serializedFavorites = JSON.stringify(nextFavorites);
+    cachedFavorites = nextFavorites;
+    cachedStorageValue = serializedFavorites;
+
+    if (typeof window !== 'undefined') {
+        try {
+            localStorage.setItem(STORAGE_KEY, serializedFavorites);
+        } catch (error) {
+            console.error('Failed to persist favorites', error);
+        }
+    }
+
+    notifyListeners();
+}
 
 export function useFavorites() {
-    const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
-
-    // Load initial state
-    useEffect(() => {
-        const loadFavorites = () => {
-            try {
-                const stored = localStorage.getItem(STORAGE_KEY);
-                if (stored) {
-                    setFavorites(JSON.parse(stored));
-                }
-            } catch (e) {
-                console.error("Failed to parse favorites", e);
-            }
-        };
-
-        loadFavorites();
-
-        // Listen for changes from other components
-        const handleStorageChange = () => loadFavorites();
-        window.addEventListener(EVENT_KEY, handleStorageChange);
-        
-        return () => {
-            window.removeEventListener(EVENT_KEY, handleStorageChange);
-        };
-    }, []);
+    const favorites = useSyncExternalStore(subscribe, getFavoritesSnapshot, () => []);
 
     const isFavorite = useCallback((id: string) => {
         return favorites.some(f => f.id === id);
@@ -56,11 +148,7 @@ export function useFavorites() {
             newFavorites = [item, ...currentFavorites];
         }
 
-        setFavorites(newFavorites);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newFavorites));
-        
-        // Notify other components
-        window.dispatchEvent(new Event(EVENT_KEY));
+        persistFavorites(newFavorites);
     }, [favorites]);
 
     return { favorites, isFavorite, toggleFavorite };

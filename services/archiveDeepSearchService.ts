@@ -43,6 +43,7 @@ export interface ArchiveMeetingIndexQueryResult {
 
 const INDEX_URL = '/data/archive-meetings.index.json';
 
+let archiveMeetingIndexCache: ArchiveMeetingIndexDocument | null = null;
 let archiveMeetingIndexPromise: Promise<ArchiveMeetingIndexDocument> | null = null;
 
 function normalizeSearchText(value?: string): string {
@@ -78,13 +79,16 @@ function scoreMatch(item: ArchiveMeetingIndexItem, normalizedQuery: string): num
 }
 
 export async function loadArchiveMeetingIndex(signal?: AbortSignal): Promise<ArchiveMeetingIndexDocument> {
+  if (archiveMeetingIndexCache) return archiveMeetingIndexCache;
   if (!archiveMeetingIndexPromise) {
-    archiveMeetingIndexPromise = fetch(INDEX_URL, { signal })
+    archiveMeetingIndexPromise = fetch(INDEX_URL)
       .then(async (response) => {
         if (!response.ok) {
           throw new Error(`Archivindex konnte nicht geladen werden (${response.status}).`);
         }
-        return response.json() as Promise<ArchiveMeetingIndexDocument>;
+        const index = (await response.json()) as ArchiveMeetingIndexDocument;
+        archiveMeetingIndexCache = index;
+        return index;
       })
       .catch((error) => {
         archiveMeetingIndexPromise = null;
@@ -96,6 +100,7 @@ export async function loadArchiveMeetingIndex(signal?: AbortSignal): Promise<Arc
 }
 
 export function clearArchiveMeetingIndexCache() {
+  archiveMeetingIndexCache = null;
   archiveMeetingIndexPromise = null;
 }
 

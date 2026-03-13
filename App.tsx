@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback, useDeferredValue } from 'react';
-import { MemoryRouter as Router, Routes, Route, Link, NavLink, useParams, useNavigate, useLocation } from 'react-router-dom';
+import React, { Suspense, lazy, useState, useEffect, useMemo, useCallback } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, NavLink, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useOparlItem, useOparlFiltered, FilterConfig } from './hooks/useOparl';
 import { useDashboardData } from './hooks/useDashboardData';
 import { usePaperResults } from './hooks/usePaperResults';
 import { getList, getListSnapshot, getItem } from './services/oparlApiService';
+import { DASHBOARD_PARTY_ACTIVITY_TOP_N, fetchPartyActivityStatsForYear } from './services/dashboardService';
 import {
     callMcpTool,
     listMcpTools,
@@ -21,15 +22,20 @@ import {
 } from './services/archiveDeepSearchService';
 import { runtimeConfig } from './services/runtimeConfig';
 import { useFavorites } from './hooks/useFavorites';
+import { ThemeProvider, useTheme } from './hooks/useTheme';
 import { Meeting, Paper, Person, Organization, AgendaItem, Consultation, File as OparlFile, Location as OparlLocation, PagedResponse } from './types';
-import { LoadingSpinner, ErrorMessage, Card, Pagination, PageTitle, DetailSection, DetailItem, DownloadLink, CalendarDaysIcon, DocumentTextIcon, HomeIcon, UsersIcon, BuildingLibraryIcon, LinkIcon, GeminiCard, SparklesIcon, TableSkeleton, FavoriteButton, StarIconSolid, ArchiveBoxIcon, MagnifyingGlassIcon, CommandLineIcon, InformationCircleIcon } from './components/ui';
+import { LoadingSpinner, ErrorMessage, Card, Pagination, PageTitle, DetailSection, DetailItem, DownloadLink, CalendarDaysIcon, DocumentTextIcon, HomeIcon, UsersIcon, BuildingLibraryIcon, LinkIcon, GeminiCard, SparklesIcon, TableSkeleton, FavoriteButton, StarIconSolid, ArchiveBoxIcon, MagnifyingGlassIcon, CommandLineIcon, InformationCircleIcon, MapIcon, MoonIcon, SunIcon } from './components/ui';
 import { validateDateRange } from './utils/dateFilters';
-import { buildFactionMatchers } from './utils/factionMatching';
-import { computePartyActivityStats, PartyActivityStat } from './utils/partyActivityStats';
+import { PartyActivityStat } from './utils/partyActivityStats';
+import { AtlasDashboardTeaser } from './routes/atlas/AtlasDashboardTeaser';
+import { ArchiveDeepSearch } from './routes/shared/ArchiveDeepSearch';
+import { DateInputField } from './routes/shared/DateInputField';
+import { PaperDeepSearch } from './routes/shared/PaperDeepSearch';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: <HomeIcon /> },
   { path: '/search', label: 'Suche', icon: <MagnifyingGlassIcon /> },
+  { path: '/atlas', label: 'Themenatlas', icon: <MapIcon /> },
   { path: '/meetings', label: 'Sitzungen', icon: <CalendarDaysIcon /> },
   { path: '/archive', label: 'Archiv', icon: <ArchiveBoxIcon /> },
   { path: '/papers', label: 'Vorlagen', icon: <DocumentTextIcon /> },
@@ -38,6 +44,18 @@ const NAV_ITEMS = [
   { path: '/mcp', label: 'MCP Server', icon: <CommandLineIcon /> },
   { path: '/help', label: 'Hilfe / Informationen', icon: <InformationCircleIcon /> },
 ];
+
+const ORGANIZATION_CHART_COLORS = ['#A43C34', '#4C6A80', '#8C6A3A', '#4F765F', '#75566A', '#A36E47'];
+
+const LazyAtlasPage = lazy(() => import('./routes/AtlasPageRoute'));
+const LazyMeetingDetailPage = lazy(() => import('./routes/MeetingDetailPage'));
+const LazyMeetingArchive = lazy(() => import('./routes/MeetingArchivePage'));
+const LazyPaperDetailPage = lazy(() => import('./routes/PaperDetailPage'));
+const LazySearchPage = lazy(() => import('./routes/SearchPage'));
+const LazyMcpGuidePage = lazy(() => import('./routes/McpGuidePage'));
+const LazyHelpPage = lazy(() => import('./routes/HelpPage'));
+
+export { ArchiveDeepSearch };
 
 // Helper to encode URL for router param - URL SAFE BASE64
 const encodeUrl = (url: string) => {
@@ -354,24 +372,60 @@ export const normalizeOrganizationClassification = (value?: string | null): stri
 };
 
 // Layout Components
+const BrandMark: React.FC = () => (
+    <span className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-app-border bg-app-surface-alt text-app-info shadow-sm shadow-black/10 dark:border-[#324968] dark:bg-[#10203a] dark:text-[#d9e6f5]">
+        <span className="scale-110">
+            <BuildingLibraryIcon />
+        </span>
+    </span>
+);
+
+const ThemeSwitcher: React.FC = () => {
+    const { resolvedTheme, setPreference } = useTheme();
+    const isDark = resolvedTheme === 'dark';
+
+    return (
+        <button
+            type="button"
+            role="switch"
+            aria-checked={isDark}
+            aria-label="Dunkelmodus umschalten"
+            title={isDark ? 'Dunkel an' : 'Dunkel aus'}
+            onClick={() => setPreference(isDark ? 'light' : 'dark')}
+            className="group relative inline-flex h-12 w-[4.9rem] items-center rounded-full border border-app-border bg-app-surface/92 px-1.5 shadow-lg shadow-black/10 transition-colors hover:bg-app-surface dark:border-[#324968] dark:bg-[#0b1730]/95"
+        >
+            <span className="sr-only">{isDark ? 'Dunkel an' : 'Dunkel aus'}</span>
+            <span className="absolute left-3 text-app-muted transition-colors group-hover:text-app-text dark:text-slate-400 dark:group-hover:text-white">
+                <SunIcon />
+            </span>
+            <span className="absolute right-3 text-app-muted transition-colors group-hover:text-app-text dark:text-slate-400 dark:group-hover:text-white">
+                <MoonIcon />
+            </span>
+            <span
+                aria-hidden="true"
+                className={`relative z-10 flex h-9 w-9 items-center justify-center rounded-full border shadow-md transition-transform duration-300 ease-out ${
+                    isDark
+                        ? 'translate-x-[1.95rem] border-[#3f5270] bg-[#13233d] text-[#ffc57c]'
+                        : 'translate-x-0 border-[#d3b562] bg-[#f1d46d] text-[#6a5108]'
+                }`}
+            >
+                {isDark ? <MoonIcon /> : <SunIcon />}
+            </span>
+            <span className="pointer-events-none absolute inset-0 rounded-full ring-1 ring-black/5 dark:ring-white/5" />
+        </button>
+    );
+};
+
 const Header: React.FC = () => {
     const location = useLocation();
-    
-    // Safety check for AI service
-    useEffect(() => {
-        if (runtimeConfig.enableAi && !process.env.API_KEY && !process.env.GEMINI_API_KEY) {
-            console.warn("[RATISA] No API Key found. AI Search will be disabled.");
-        }
-    }, []);
-
     const pathnames = location.pathname.split('/').filter(x => x);
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     const routeNameMap: Record<string, string> = {
         meetings: 'Sitzungen',
         papers: 'Vorlagen',
         people: 'Personen',
         organizations: 'Gremien',
+        atlas: 'Themenatlas',
         archive: 'Archiv',
         search: 'Suche',
         mcp: 'MCP Server',
@@ -379,71 +433,75 @@ const Header: React.FC = () => {
     };
 
     return (
-        <header className="bg-gray-900/80 backdrop-blur-md border-b border-gray-800 p-4 sticky top-0 z-30 h-16 flex items-center justify-between">
-            <div className="flex items-center">
-                <Link to="/" className="flex items-center space-x-3 group">
-                    <span className="text-2xl transform group-hover:scale-110 transition-transform duration-200">🏛️</span>
-                    <div>
-                        <h1 className="text-lg font-bold text-white tracking-tight">RATISA</h1>
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Köln Ratinformation System Assistent</p>
-                    </div>
-                </Link>
+        <header className="sticky top-0 z-30 border-b border-app-border bg-app-surface/92 px-4 py-3 backdrop-blur-md dark:border-[#1b314d] dark:bg-[#081126]/96 md:px-8">
+            <div className="flex items-center justify-between gap-4">
+                <div className="flex min-w-0 items-center pr-2">
+                    <Link to="/" className="flex min-w-0 items-center gap-3 group">
+                        <BrandMark />
+                        <div className="min-w-0">
+                            <h1 className="truncate text-lg font-semibold tracking-[0.02em] text-app-text dark:text-white">RATISA</h1>
+                            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.24em] text-app-muted dark:text-slate-400">Köln Ratinformation System Assistent</p>
+                        </div>
+                    </Link>
 
-                 {/* Breadcrumbs - Desktop */}
-                {pathnames.length > 0 && (
-                    <nav className="hidden md:flex items-center text-sm text-gray-400 ml-8 pl-8 border-l border-gray-700 h-8">
-                        {pathnames.map((value, index) => {
-                            const to = `/${pathnames.slice(0, index + 1).join('/')}`;
-                            const isLast = index === pathnames.length - 1;
-                            const displayName = routeNameMap[value] || 'Details';
+                    {pathnames.length > 0 && (
+                        <nav className="ml-8 hidden h-8 min-w-0 items-center border-l border-app-border pl-8 text-sm text-app-muted dark:border-[#1b314d] dark:text-slate-400 md:flex">
+                            {pathnames.map((value, index) => {
+                                const to = `/${pathnames.slice(0, index + 1).join('/')}`;
+                                const isLast = index === pathnames.length - 1;
+                                const displayName = routeNameMap[value] || 'Details';
 
-                            return (
-                                <React.Fragment key={to}>
-                                    {index > 0 && <span className="mx-2 text-gray-600">/</span>}
-                                    {isLast ? (
-                                        <span className="text-white font-medium truncate max-w-[200px] bg-gray-800/50 px-2 py-0.5 rounded">{displayName}</span>
-                                    ) : (
-                                        <Link to={to} className="hover:text-white transition-colors hover:bg-gray-800 px-2 py-0.5 rounded">
-                                            {displayName}
-                                        </Link>
-                                    )}
-                                </React.Fragment>
-                            );
-                        })}
-                    </nav>
-                )}
+                                return (
+                                    <React.Fragment key={to}>
+                                        {index > 0 && <span className="mx-2 text-app-muted/70">/</span>}
+                                        {isLast ? (
+                                            <span className="max-w-[220px] truncate rounded-full border border-app-border bg-app-surface-alt px-3 py-1 font-medium text-app-text dark:border-[#324968] dark:bg-[#12213a] dark:text-white">
+                                                {displayName}
+                                            </span>
+                                        ) : (
+                                            <Link
+                                                to={to}
+                                                className="rounded-full px-3 py-1 transition-colors hover:bg-app-surface-alt hover:text-app-text dark:hover:bg-[#12213a] dark:hover:text-white"
+                                            >
+                                                {displayName}
+                                            </Link>
+                                        )}
+                                    </React.Fragment>
+                                );
+                            })}
+                        </nav>
+                    )}
+                </div>
+                <ThemeSwitcher />
             </div>
-            
-            {/* Mobile Menu Toggle could go here if sidebar wasn't always visible/bottom on mobile */}
         </header>
     );
 };
 
 const Sidebar: React.FC = () => (
-    <nav className="p-4 space-y-1 h-full overflow-y-auto">
+    <nav className="h-full overflow-y-auto p-4">
         <div className="mb-6 px-3">
-             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Menü</p>
+             <p className="text-xs font-semibold uppercase tracking-[0.22em] text-app-muted">Navigation</p>
         </div>
         {NAV_ITEMS.map(item => (
             <NavLink
                 key={item.path}
                 to={item.path}
                 className={({ isActive }) =>
-                    `flex items-center px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
+                    `group flex items-center rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
                         isActive
-                            ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg shadow-red-900/20'
-                            : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                            ? 'bg-app-accent text-white shadow-sm shadow-black/10'
+                            : 'text-app-muted hover:bg-app-surface-alt hover:text-app-text'
                     }`
                 }
             >
                 {({ isActive }) => (
                     <>
-                        <span className={`transition-colors duration-200 ${isActive ? 'text-white' : 'text-gray-500 group-hover:text-white'}`}>
+                        <span className={`transition-colors ${isActive ? 'text-white' : 'text-app-muted group-hover:text-app-text'}`}>
                             {item.icon}
                         </span>
                         <span className="ml-3 hidden md:inline">{item.label}</span>
-                        {/* Mobile: Show label only for active item or all if needed. For now sticking to design */}
-                        <span className="ml-3 md:hidden inline-block text-xs">{item.label}</span>
+                        <span className="ml-3 inline-block text-xs md:hidden">{item.label}</span>
                     </>
                 )}
             </NavLink>
@@ -451,51 +509,50 @@ const Sidebar: React.FC = () => (
     </nav>
 );
 
-export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <div className="h-screen flex flex-col md:flex-row overflow-hidden bg-[#0f111a] text-gray-100 font-sans selection:bg-red-500/30">
-        {/* Subtle background mesh */}
-        <div className="fixed inset-0 z-0 pointer-events-none opacity-20" style={{
-            backgroundImage: 'radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.1) 0%, transparent 20%), radial-gradient(circle at 90% 80%, rgba(220, 38, 38, 0.08) 0%, transparent 20%)'
-        }}></div>
+const LayoutFrame: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+    <div className="app-shell relative flex h-screen flex-col overflow-hidden md:flex-row">
+        <div
+            className="pointer-events-none fixed inset-0 z-0 opacity-50"
+            style={{
+                backgroundImage:
+                    'linear-gradient(90deg, rgba(21,33,43,0.03) 1px, transparent 1px), linear-gradient(180deg, rgba(21,33,43,0.03) 1px, transparent 1px)',
+                backgroundSize: '32px 32px',
+            }}
+        />
 
-        <aside className="w-full md:w-64 bg-[#111827]/95 backdrop-blur border-r border-gray-800 flex-shrink-0 flex flex-col md:h-full h-auto z-20 shadow-xl">
-             {/* Mobile: Header is separate, but sidebar contains logic */}
-            <div className="hidden md:block">
-                 {/* Sidebar Header Space if needed, currently main header is top full width */}
-            </div>
-            <div className="hidden md:block flex-1 py-4">
+        <aside className="z-20 flex h-auto w-full flex-shrink-0 flex-col border-r border-app-border bg-app-surface/90 shadow-sm backdrop-blur dark:border-[#1b314d] dark:bg-[#081126]/96 md:h-full md:w-64">
+            <div className="hidden flex-1 py-4 md:block">
                 <Sidebar />
             </div>
-            
-            {/* Mobile Bottom Navigation */}
-            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#161b22]/95 backdrop-blur-lg border-t border-gray-800 flex justify-around p-2 z-50 safe-area-bottom">
+
+            <div className="safe-area-bottom fixed bottom-0 left-0 right-0 z-50 flex justify-around border-t border-app-border bg-app-surface/96 p-2 backdrop-blur-lg dark:border-[#1b314d] dark:bg-[#081126]/98 md:hidden">
                  {NAV_ITEMS.slice(0, 5).map(item => (
-                    <NavLink 
-                        key={item.path} 
+                    <NavLink
+                        key={item.path}
                         to={item.path}
-                        className={({isActive}) => `flex flex-col items-center justify-center p-2 rounded-lg ${isActive ? 'text-red-500' : 'text-gray-500'}`}
+                        className={({isActive}) => `flex flex-col items-center justify-center rounded-lg p-2 ${isActive ? 'text-app-accent' : 'text-app-muted'}`}
                     >
                          {item.icon}
-                         <span className="text-[10px] mt-1">{item.label}</span>
+                         <span className="mt-1 text-[10px]">{item.label}</span>
                     </NavLink>
                  ))}
             </div>
         </aside>
 
-        <div className="flex-1 flex flex-col h-full relative z-10">
+        <div className="relative z-10 flex h-full flex-1 flex-col">
             <Header />
-            <main className="flex-1 p-4 md:p-8 overflow-y-auto scroll-smooth pb-24 md:pb-8">
-                <div className="max-w-7xl mx-auto w-full">
+            <main className="flex-1 overflow-y-auto scroll-smooth px-4 py-4 pb-24 md:px-8 md:py-8 md:pb-8">
+                <div className="mx-auto w-full max-w-7xl">
                     {children}
                 </div>
             </main>
-            <footer className="px-4 md:px-8 pb-20 md:pb-4">
-                <div className="max-w-7xl mx-auto w-full border-t border-gray-800 pt-3">
-                    <p className="text-xs text-gray-500">
+            <footer className="px-4 pb-20 md:px-8 md:pb-4">
+                <div className="mx-auto w-full max-w-7xl border-t border-app-border pt-4">
+                    <p className="text-xs text-app-muted">
                         Created by{' '}
                         <a
                             href="https://www.linkedin.com/in/ertan-%C3%B6zcan-73bb3399"
-                            className="text-gray-400 hover:text-white transition-colors underline underline-offset-2"
+                            className="app-link"
                             target="_blank"
                             rel="noreferrer"
                         >
@@ -504,7 +561,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                         {' '}and supported by{' '}
                         <a
                             href="https://digitalheritagelab.com/"
-                            className="text-gray-400 hover:text-white transition-colors underline underline-offset-2"
+                            className="app-link"
                             target="_blank"
                             rel="noreferrer"
                         >
@@ -517,9 +574,21 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
     </div>
 );
 
+export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+    <ThemeProvider>
+        <LayoutFrame>{children}</LayoutFrame>
+    </ThemeProvider>
+);
+
+const RouteLoadingFallback: React.FC = () => (
+  <div className="p-12">
+    <LoadingSpinner />
+  </div>
+);
+
 // --- Charts & Statistics ---
 
-const PartyActivityChart: React.FC<{ year?: string }> = ({ year: targetYear }) => {
+export const PartyActivityChart: React.FC<{ year?: string }> = ({ year: targetYear }) => {
     const currentYear = new Date().getFullYear().toString();
     const [stats, setStats] = useState<PartyActivityStat[]>([]);
     const [year, setYear] = useState<string>(targetYear ?? currentYear);
@@ -533,30 +602,14 @@ const PartyActivityChart: React.FC<{ year?: string }> = ({ year: targetYear }) =
             try {
                 setLoading(true);
                 setError(null);
-                const paperParams = new URLSearchParams();
-                paperParams.set('limit', '200');
-                paperParams.set('sort', '-date');
-
-                const organizationParams = new URLSearchParams();
-                organizationParams.set('limit', '400');
-
-                const [paperResult, organizationResult] = await Promise.all([
-                    getList<Paper>('papers', paperParams, controller.signal),
-                    getList<Organization>('organizations', organizationParams, controller.signal),
-                ]);
-                if (controller.signal.aborted) return;
-
                 const activeYear = targetYear ?? currentYear;
                 setYear(activeYear);
-
-                const factionMatchers = buildFactionMatchers(organizationResult.data);
-                const { stats: computedStats, motionCount } = computePartyActivityStats({
-                    papers: paperResult.data,
-                    year: activeYear,
-                    factionMatchers,
-                    topN: 8,
-                    unknownLabel: 'Unbekannt',
-                });
+                const { stats: computedStats, motionCount } = await fetchPartyActivityStatsForYear(
+                    activeYear,
+                    controller.signal,
+                    DASHBOARD_PARTY_ACTIVITY_TOP_N,
+                );
+                if (controller.signal.aborted) return;
 
                 if (!controller.signal.aborted) {
                     setStats(computedStats);
@@ -572,41 +625,49 @@ const PartyActivityChart: React.FC<{ year?: string }> = ({ year: targetYear }) =
         return () => { controller.abort(); };
     }, [targetYear]);
 
-    if (loading) return <div className="h-48 flex items-center justify-center"><LoadingSpinner /></div>;
-    if (error) return <div className="text-red-400 text-sm p-4 bg-red-900/20 rounded-lg">{error}</div>;
+    if (loading) return <div className="flex h-48 items-center justify-center"><LoadingSpinner /></div>;
+    if (error) {
+        return (
+            <div className="rounded-xl border border-app-danger/25 bg-app-danger/10 px-4 py-3 text-sm text-app-danger">
+                {error}
+            </div>
+        );
+    }
     
     return (
         <div>
-             <div className="flex justify-between items-end mb-6">
+             <div className="mb-6 flex items-end justify-between">
                 <div>
-                    <p className="text-sm text-gray-400">Anträge pro Fraktion ({year})</p>
-                    <p className="text-[11px] text-gray-500">heuristisch aus Titel und Typ</p>
+                    <p className="text-sm font-semibold text-app-text">Anträge pro Fraktion ({year})</p>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-app-muted">heuristisch aus Titel und Typ</p>
                 </div>
-                <span className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">Top 8</span>
+                <span className="app-badge-muted">Top {DASHBOARD_PARTY_ACTIVITY_TOP_N}</span>
              </div>
             {!hasMotions ? (
-                <div className="p-8 text-center text-gray-500 bg-gray-900/50 rounded-lg border border-gray-800 border-dashed">Keine Anträge für {year}.</div>
+                <div className="rounded-xl border border-dashed border-app-border bg-app-surface-alt/70 p-8 text-center text-app-muted">
+                    Keine Anträge für {year}.
+                </div>
             ) : (
                 <div className="space-y-4">
                     {stats.map((stat, index) => (
                         <div key={index} className="group">
-                            <div className="flex justify-between text-xs mb-1.5">
-                                <span className="font-semibold text-gray-300 group-hover:text-white transition-colors">{stat.name}</span>
-                                <span className="text-gray-400 font-mono">{stat.count}</span>
+                            <div className="mb-1.5 flex justify-between text-xs">
+                                <span className="font-semibold text-app-text transition-colors group-hover:text-app-accent">{stat.name}</span>
+                                <span className="font-mono text-app-muted">{stat.count}</span>
                             </div>
-                            <div className="w-full bg-gray-700/30 rounded-full h-2.5 overflow-hidden ring-1 ring-white/5">
+                            <div className="h-2.5 w-full overflow-hidden rounded-full bg-app-surface-alt">
                                 <div 
-                                    className="bg-gradient-to-r from-red-600 to-orange-600 h-full rounded-full transition-all duration-1000 ease-out relative" 
+                                    className="relative h-full rounded-full bg-app-accent transition-all duration-1000 ease-out" 
                                     style={{ width: `${stat.percentage}%` }}
                                 >
-                                    <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                    <div className="absolute inset-0 bg-white/15 opacity-0 transition-opacity group-hover:opacity-100"></div>
                                 </div>
                             </div>
                         </div>
                     ))}
                 </div>
             )}
-            <p className="mt-4 text-[11px] leading-relaxed text-gray-500">
+            <p className="mt-4 text-[11px] leading-relaxed text-app-muted">
                 Unbekannt bedeutet “Antrag erkannt, aber keiner Fraktion per Text-Matching zuordenbar”.
             </p>
         </div>
@@ -629,24 +690,24 @@ const SimplePieChart: React.FC<{
         return (
              // ... single circle code
              <div className="relative w-40 h-40 mx-auto">
-                <svg viewBox="-100 -100 200 200" className="w-full h-full drop-shadow-xl">
+                <svg viewBox="-100 -100 200 200" className="h-full w-full drop-shadow-lg">
                     <circle
                         cx="0"
                         cy="0"
                         r="100"
                         fill={data[0].color}
-                        stroke={isSelected ? '#f3f4f6' : '#1f2937'}
+                        stroke={isSelected ? 'rgb(var(--app-accent))' : 'rgb(var(--app-bg))'}
                         strokeWidth={isSelected ? '6' : '4'}
                         className={`${onSegmentClick ? 'cursor-pointer' : 'cursor-default'} transition-opacity ${hasSelection && !isSelected ? 'opacity-40' : 'opacity-100'}`}
                         data-testid="pie-segment-0"
                         onClick={() => onSegmentClick?.(data[0].name)}
                     />
-                    <circle cx="0" cy="0" r="70" fill="#1f2937" />
+                    <circle cx="0" cy="0" r="70" fill="rgb(var(--app-surface))" />
                 </svg>
                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="text-center">
-                        <span className="text-gray-400 text-[10px] uppercase font-bold tracking-wider">Gesamt</span>
-                        <span className="text-white text-lg font-bold block">{total}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-app-muted">Gesamt</span>
+                        <span className="block text-lg font-bold text-app-text">{total}</span>
                     </div>
                 </div>
              </div>
@@ -655,7 +716,7 @@ const SimplePieChart: React.FC<{
 
     return (
         <div className="relative w-40 h-40 mx-auto">
-            <svg viewBox="-100 -100 200 200" className="w-full h-full transform -rotate-90 drop-shadow-xl">
+            <svg viewBox="-100 -100 200 200" className="h-full w-full -rotate-90 transform drop-shadow-lg">
                 {data.map((item, index) => {
                     const percentage = item.value / total;
                     const angle = percentage * 360;
@@ -675,7 +736,7 @@ const SimplePieChart: React.FC<{
                             key={item.name}
                             d={path}
                             fill={item.color}
-                            stroke={isSelected ? '#f3f4f6' : '#1f2937'}
+                            stroke={isSelected ? 'rgb(var(--app-accent))' : 'rgb(var(--app-bg))'}
                             strokeWidth={isSelected ? '6' : '4'}
                             data-testid={`pie-segment-${index}`}
                             onClick={() => onSegmentClick?.(item.name)}
@@ -683,12 +744,12 @@ const SimplePieChart: React.FC<{
                         />
                     );
                 })}
-                <circle cx="0" cy="0" r="70" fill="#1f2937" />
+                <circle cx="0" cy="0" r="70" fill="rgb(var(--app-surface))" />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="text-center">
-                    <span className="text-gray-400 text-[10px] uppercase font-bold tracking-wider">Gesamt</span>
-                    <span className="text-white text-lg font-bold block">{total}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-app-muted">Gesamt</span>
+                    <span className="block text-lg font-bold text-app-text">{total}</span>
                 </div>
             </div>
         </div>
@@ -703,7 +764,7 @@ const OrganizationTypeChart: React.FC<{
     const [stats, setStats] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const COLORS = ['#6366f1', '#ec4899', '#10b981', '#f59e0b', '#8b5cf6', '#0ea5e9'];
+    const COLORS = ORGANIZATION_CHART_COLORS;
     const hasSelection = Boolean(selectedClassification);
 
     useEffect(() => {
@@ -730,37 +791,46 @@ const OrganizationTypeChart: React.FC<{
         return () => controller.abort();
     }, []);
 
-    if (loading) return <div className="h-40 flex items-center justify-center"><LoadingSpinner /></div>;
+    if (loading) return <div className="flex h-40 items-center justify-center"><LoadingSpinner /></div>;
     if (stats.length === 0) return null;
     const chartData = stats.map(s => ({ name: s.name, value: s.count, color: s.color }));
 
     return (
-        <div className="bg-gray-800/40 border border-gray-700/50 rounded-2xl p-6 backdrop-blur-sm shadow-lg">
-            <h3 className="text-base font-bold text-white mb-6 flex items-center gap-2">
-                <span>📊</span> Verteilung nach Typ
+        <div className="app-surface p-6">
+            <h3 className="mb-6 flex items-center gap-2 text-base font-semibold text-app-text">
+                <span className="rounded-full bg-app-info/10 p-2 text-app-info">
+                    <BuildingLibraryIcon />
+                </span>
+                Verteilung nach Typ
             </h3>
-            <div className="flex flex-col md:flex-row items-center justify-center gap-8">
-                <div className="flex-shrink-0 scale-100 hover:scale-105 transition-transform duration-300">
+            <div className="flex flex-col items-center justify-center gap-8 md:flex-row">
+                <div className="flex-shrink-0 transition-transform duration-300 hover:scale-105">
                     <SimplePieChart
                         data={chartData}
                         selectedName={selectedClassification}
                         onSegmentClick={onToggleClassification}
                     />
                 </div>
-                <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid w-full flex-1 grid-cols-1 gap-3 sm:grid-cols-2">
                     {stats.map((stat, i) => (
                         <button
                             key={i}
                             type="button"
                             aria-pressed={selectedClassification === stat.name}
                             onClick={() => onToggleClassification?.(stat.name)}
-                            className={`flex items-center p-2 rounded-lg transition-colors w-full text-left ${onToggleClassification ? 'cursor-pointer hover:bg-white/5' : 'cursor-default'} ${selectedClassification === stat.name ? 'bg-white/10 ring-1 ring-indigo-400/60' : ''} ${hasSelection && selectedClassification !== stat.name ? 'opacity-60' : ''}`}
+                            className={`flex w-full items-center rounded-xl border px-3 py-3 text-left transition-colors ${
+                                onToggleClassification ? 'cursor-pointer hover:border-app-info/40 hover:bg-app-surface-alt' : 'cursor-default'
+                            } ${
+                                selectedClassification === stat.name
+                                    ? 'border-app-info/40 bg-app-info/10'
+                                    : 'border-app-border bg-app-surface'
+                            } ${hasSelection && selectedClassification !== stat.name ? 'opacity-60' : ''}`}
                         >
-                            <div className="w-2.5 h-2.5 rounded-full mr-3 flex-shrink-0 ring-2 ring-white/10" style={{ backgroundColor: stat.color }}></div>
+                            <div className="mr-3 h-2.5 w-2.5 flex-shrink-0 rounded-full ring-2 ring-white/10" style={{ backgroundColor: stat.color }}></div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-baseline">
-                                    <p className="text-xs font-semibold text-gray-200 truncate">{stat.name}</p>
-                                    <span className="text-[10px] text-gray-400 font-mono ml-2">{Math.round(stat.percentage)}%</span>
+                                    <p className="truncate text-xs font-semibold text-app-text">{stat.name}</p>
+                                    <span className="ml-2 font-mono text-[10px] text-app-muted">{Math.round(stat.percentage)}%</span>
                                 </div>
                             </div>
                         </button>
@@ -801,24 +871,23 @@ const TrendingTopics: React.FC = () => {
 
     const handleTopicClick = (word: string) => navigate(`/papers?q=${encodeURIComponent(word)}`);
 
-    if (loading) return <div className="h-20 animate-pulse bg-gray-800/50 rounded-lg"></div>;
+    if (loading) return <div className="h-20 animate-pulse rounded-lg bg-app-surface-alt"></div>;
     if (topics.length === 0) return null;
 
     return (
-        <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/30 border border-indigo-500/20 rounded-2xl p-6 mb-8 relative overflow-hidden">
-             <div className="absolute top-0 right-0 p-4 opacity-10"><SparklesIcon /></div>
-             <h3 className="text-base font-bold text-white mb-4 flex items-center gap-2 relative z-10">
-                <span>🏷️</span> Aktuelle Themen
+        <div className="app-surface mb-8 p-6">
+             <h3 className="mb-4 flex items-center gap-2 text-base font-semibold text-app-text">
+                <span className="rounded-full bg-app-info/10 p-2 text-app-info"><SparklesIcon /></span>
+                Aktuelle Themen
             </h3>
-            <div className="flex flex-wrap gap-2 relative z-10">
+            <div className="flex flex-wrap gap-2">
                 {topics.map((topic, i) => (
                     <button
                         key={i}
                         onClick={() => handleTopicClick(topic.word)}
-                        className="px-3 py-1.5 rounded-lg bg-gray-800/80 hover:bg-indigo-600 text-gray-300 hover:text-white text-xs font-medium transition-all duration-200 border border-gray-700 hover:border-indigo-400 flex items-center shadow-sm"
+                        className="rounded-full border border-app-border bg-app-surface px-3 py-1.5 text-xs font-medium text-app-text transition-colors hover:border-app-info/40 hover:bg-app-surface-alt hover:text-app-info"
                     >
                         {topic.word}
-                        {/* Remove count bubble for cleaner look, or style it subtler */}
                     </button>
                 ))}
             </div>
@@ -856,22 +925,30 @@ const FilterSelect: React.FC<{
     };
 
     return (
-        <div className="bg-gray-800/40 border border-gray-700/50 rounded-2xl p-5 mb-6 backdrop-blur-sm">
-            <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2 mb-4">
-                {icon || <span className="text-lg">⚙️</span>} {label}
-            </h3>
-            <select
-                value={currentVal}
-                onChange={handleChange}
-                className="w-full bg-gray-900/50 border border-gray-700 text-white text-sm rounded-lg px-4 py-3 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all appearance-none cursor-pointer hover:bg-gray-800"
-            >
-                <option value="">Alle anzeigen</option>
-                {options.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                    </option>
-                ))}
-            </select>
+        <div className="app-filter-shell mb-6">
+            <div className="app-filter-header">
+                <h3 className="app-filter-title">
+                    <span className="app-filter-title-icon">
+                    {icon || <InformationCircleIcon />}
+                    </span>
+                    {label}
+                </h3>
+            </div>
+            <div className="app-filter-group">
+                <select
+                    aria-label={label}
+                    value={currentVal}
+                    onChange={handleChange}
+                    className="app-select app-filter-select cursor-pointer"
+                >
+                    <option value="">Alle anzeigen</option>
+                    {options.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                        </option>
+                    ))}
+                </select>
+            </div>
         </div>
     );
 };
@@ -884,25 +961,26 @@ const FavoritesList: React.FC = () => {
     if (favorites.length === 0) return null;
     // ... logic same
      return (
-         <div className="bg-gray-800/40 border border-gray-700/50 rounded-2xl mb-8 overflow-hidden backdrop-blur-sm">
-            <div className="p-4 border-b border-gray-700/50 flex items-center justify-between bg-gray-800/50">
-                <h2 className="text-base font-bold text-white flex items-center gap-2">
-                    <span className="text-yellow-400"><StarIconSolid /></span> Merkliste
+         <div className="app-surface mb-8 overflow-hidden">
+            <div className="flex items-center justify-between border-b border-app-border bg-app-surface-alt px-4 py-4">
+                <h2 className="flex items-center gap-2 text-base font-semibold text-app-text">
+                    <span className="rounded-full bg-app-warning/10 p-2 text-app-warning"><StarIconSolid /></span>
+                    Merkliste
                 </h2>
-                <span className="bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 text-[10px] font-bold px-2 py-0.5 rounded-full">{favorites.length}</span>
+                <span className="app-badge-warning">{favorites.length}</span>
             </div>
-            <ul className="divide-y divide-gray-700/50 max-h-60 overflow-y-auto">
+            <ul className="max-h-60 divide-y divide-app-border overflow-y-auto">
                 {favorites.map(item => (
-                    <li key={item.id} className="p-3 hover:bg-white/5 flex items-center group transition-colors">
-                        <div className="text-gray-500 mr-3 group-hover:text-gray-300 transition-colors">
+                    <li key={item.id} className="group flex items-center p-3 transition-colors hover:bg-app-surface-alt/80">
+                        <div className="mr-3 text-app-muted transition-colors group-hover:text-app-warning">
                             {/* Icon logic inline for brevity */}
                             <StarIconSolid /> 
                         </div>
                         <div className="flex-1 min-w-0">
-                            <Link to={item.path} className="block font-medium text-sm text-gray-200 hover:text-red-400 truncate transition-colors">
+                            <Link to={item.path} className="block truncate text-sm font-medium text-app-text transition-colors hover:text-app-accent">
                                 {item.name}
                             </Link>
-                            {item.info && <p className="text-[10px] text-gray-500">{item.info}</p>}
+                            {item.info && <p className="text-[10px] text-app-muted">{item.info}</p>}
                         </div>
                         <div className="opacity-0 group-hover:opacity-100 transition-opacity">
                             <FavoriteButton item={item} />
@@ -960,56 +1038,67 @@ const DateRangeFilter: React.FC = () => {
     };
 
     return (
-        <form onSubmit={applyFilters} className="bg-gray-800/40 border border-gray-700/50 rounded-2xl p-5 mb-6 backdrop-blur-sm">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-bold text-gray-200 flex items-center gap-2">
-                    <CalendarDaysIcon /> Zeitraum filtern
+        <form onSubmit={applyFilters} className="app-filter-shell mb-6">
+            <div className="app-filter-header">
+                <h3 className="app-filter-title">
+                    <span className="app-filter-title-icon">
+                        <CalendarDaysIcon />
+                    </span>
+                    Zeitraum filtern
                 </h3>
                 {(minDateParam || maxDateParam) && (
-                    <button type="button" onClick={clearFilters} className="text-xs text-red-400 hover:text-red-300 font-medium bg-red-900/10 px-2 py-1 rounded hover:bg-red-900/20 transition-colors">
+                    <button type="button" onClick={clearFilters} className="app-badge-danger">
                         Zurücksetzen
                     </button>
                 )}
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-gray-900/50 p-3 rounded-lg border border-gray-800">
-                    <label className="block text-[10px] uppercase text-gray-500 font-bold mb-2">Exakter Tag</label>
-                    <input 
-                        type="date" 
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] xl:items-start">
+                <div className="app-filter-group">
+                    <DateInputField
+                        label="Exakter Tag"
                         value={specificDate}
-                        onChange={(e) => { setSpecificDate(e.target.value); setMinDate(''); setMaxDate(''); setValidationError(null); }}
-                        className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-md px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none transition-all"
+                        onChange={(nextValue) => {
+                            setSpecificDate(nextValue);
+                            setMinDate('');
+                            setMaxDate('');
+                            setValidationError(null);
+                        }}
                     />
                 </div>
-                <div className="flex gap-2 items-center bg-gray-900/50 p-3 rounded-lg border border-gray-800">
-                    <div className="flex-1">
-                        <label className="block text-[10px] uppercase text-gray-500 font-bold mb-2">Von</label>
-                        <input 
-                            type="date" 
-                            value={minDate}
-                            onChange={(e) => { setMinDate(e.target.value); setSpecificDate(''); setValidationError(null); }}
-                            className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-md px-3 py-2 focus:ring-2 focus:ring-red-500 outline-none"
-                        />
-                    </div>
-                    <span className="text-gray-600 mt-5">→</span>
-                    <div className="flex-1">
-                        <label className="block text-[10px] uppercase text-gray-500 font-bold mb-2">Bis</label>
-                        <input 
-                            type="date" 
-                            value={maxDate}
-                            onChange={(e) => { setMaxDate(e.target.value); setSpecificDate(''); setValidationError(null); }}
-                            className="w-full bg-gray-800 border border-gray-700 text-white text-sm rounded-md px-3 py-2 focus:ring-2 focus:ring-red-500 outline-none"
-                        />
+                <div className="app-filter-group">
+                    <div className="app-date-range-fields">
+                        <div className="app-date-range-field">
+                            <DateInputField
+                                label="Von"
+                                value={minDate}
+                                onChange={(nextValue) => {
+                                    setMinDate(nextValue);
+                                    setSpecificDate('');
+                                    setValidationError(null);
+                                }}
+                            />
+                        </div>
+                        <div className="app-date-range-field">
+                            <DateInputField
+                                label="Bis"
+                                value={maxDate}
+                                onChange={(nextValue) => {
+                                    setMaxDate(nextValue);
+                                    setSpecificDate('');
+                                    setValidationError(null);
+                                }}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
             {validationError && (
-                <p className="mt-3 text-xs text-red-300 bg-red-900/30 border border-red-800 rounded-md px-3 py-2">
+                <p className="mt-3 rounded-md border border-app-danger/25 bg-app-danger/10 px-3 py-2 text-xs text-app-danger">
                     {validationError}
                 </p>
             )}
-            <div className="mt-4 flex justify-end">
-                <button type="submit" className="px-5 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg transition-all shadow-lg shadow-red-900/20 active:scale-95">
+            <div className="mt-4 flex justify-stretch sm:justify-end">
+                <button type="submit" className="app-button-primary w-full rounded-xl px-6 py-3 text-sm sm:w-auto">
                     Filter anwenden
                 </button>
             </div>
@@ -1382,79 +1471,77 @@ const Dashboard: React.FC = () => {
     const nextMeetingLabel = upcomingMeetings[0] ? (formatDateOnly(upcomingMeetings[0].start) || 'Bald') : 'Keine';
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
-            {/* Hero Section */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-gray-900 via-[#1a1c2e] to-[#251515] border border-gray-800 shadow-2xl p-8 md:p-12">
-                <div className="absolute top-0 right-0 p-8 opacity-20 pointer-events-none">
-                   <svg className="w-64 h-64 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L1 21h22L12 2zm0 3.99L19.53 19H4.47L12 5.99zM11 16h2v2h-2zm0-6h2v4h-2z"/></svg>
-                </div>
+        <div className="animate-in space-y-8 fade-in duration-500">
+            <div className="app-hero-panel mx-auto max-w-5xl md:px-12 md:py-14">
                 <div className="relative z-10">
-                    <h1 className="text-3xl md:text-5xl font-extrabold text-white mb-2 tracking-tight">
-                        {greeting}, <span className="text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-orange-400">Bürger.</span>
-                    </h1>
-                    <p className="text-gray-400 text-lg max-w-xl">
-                        Willkommen bei RATISA. Hier finden Sie aktuelle Sitzungen, Vorlagen und Entscheidungen transparent aufbereitet.
-                    </p>
-                    <div className="mt-8 flex flex-wrap gap-4">
-                        <Link to="/meetings" className="px-6 py-3 bg-red-600 hover:bg-red-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-red-900/30 active:scale-95 flex items-center gap-2">
-                           <CalendarDaysIcon /> Nächste Sitzungen
-                        </Link>
-                        <Link to="/search" className="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-xl font-bold transition-all border border-gray-700 hover:border-gray-600 flex items-center gap-2">
-                           <MagnifyingGlassIcon /> Suchen
-                        </Link>
+                    <div className="mt-2 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                        <div className="max-w-3xl">
+                            <h1 className="text-4xl font-semibold tracking-tight text-white md:text-6xl">
+                                {greeting}, <span className="app-hero-accent">Bürger.</span>
+                            </h1>
+                            <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-300 md:text-lg">
+                                Willkommen bei RATISA. Hier finden Sie aktuelle Sitzungen, Vorlagen und Entscheidungen transparent aufbereitet.
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap gap-4">
+                            <Link to="/meetings" className="app-button-primary rounded-2xl px-7 py-3.5 text-base shadow-lg shadow-red-950/30">
+                               <CalendarDaysIcon /> Nächste Sitzungen
+                            </Link>
+                            <Link to="/search" className="app-button-dark">
+                               <MagnifyingGlassIcon /> Suche
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
                 <Card 
                     title="Nächster Termin" 
                     value={meetingsLoading ? '...' : meetingsError ? 'Fehler' : nextMeetingLabel} 
                     icon={<CalendarDaysIcon />} 
-                    gradient="from-blue-600/20 to-indigo-600/20"
+                    gradient="from-app-info/15 to-app-surface"
                 />
                 <Card 
                     title={`Neue Vorlagen (${recentPaperWindowDays} Tage)`} 
                     value={papersLoading ? '...' : papersError ? 'Fehler' : recentPaperCount} 
                     icon={<DocumentTextIcon />} 
-                    gradient="from-emerald-600/20 to-teal-600/20"
+                    gradient="from-app-success/15 to-app-surface"
                 />
                 <Card 
                     title="Meine Merkliste" 
                     value={favorites.length} 
                     icon={<StarIconSolid />} 
-                    gradient="from-yellow-600/20 to-orange-600/20"
+                    gradient="from-app-warning/15 to-app-surface"
                 />
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-8">
-                    {/* Next Meetings List */}
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+                <div className="space-y-8 lg:col-span-2">
                     <div>
-                        <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-bold text-white">Nächste Sitzungen</h2>
-                            <Link to="/meetings" className="text-sm text-red-400 hover:text-red-300 hover:underline">Alle anzeigen →</Link>
+                        <div className="mb-4 flex items-center justify-between">
+                            <h2 className="text-xl font-semibold text-app-text">Nächste Sitzungen</h2>
+                            <Link to="/meetings" className="app-link text-sm">Alle anzeigen</Link>
                         </div>
-                        <div className="bg-gray-800/40 border border-gray-700/50 rounded-2xl overflow-hidden backdrop-blur-sm">
+                        <div className="app-surface overflow-hidden">
                             {meetingsLoading ? <div className="p-8"><LoadingSpinner /></div> : meetingsError ? (
                                 <div className="p-4">
                                     <ErrorMessage message={meetingsError.message} onRetry={refetch} />
                                 </div>
                             ) : (
-                                <div className="divide-y divide-gray-700/50">
+                                <div className="divide-y divide-app-border">
                                     {upcomingMeetings.length > 0 ? upcomingMeetings.map(meeting => (
-                                        <div key={meeting.id} className="p-4 hover:bg-white/5 transition-colors group">
+                                        <div key={meeting.id} className="group p-4 transition-colors hover:bg-app-surface-alt/70">
                                             <div className="flex items-start gap-4">
-                                                <div className="flex-shrink-0 w-16 text-center bg-gray-900/80 rounded-lg p-2 border border-gray-700">
-                                                    <span className="block text-xs text-red-400 font-bold uppercase">{new Date(meeting.start).toLocaleString('de-DE', { month: 'short' })}</span>
-                                                    <span className="block text-xl text-white font-bold">{new Date(meeting.start).getDate()}</span>
+                                                <div className="w-16 flex-shrink-0 rounded-xl border border-app-border bg-app-surface-alt p-2 text-center">
+                                                    <span className="block text-xs font-bold uppercase tracking-[0.16em] text-app-accent">{new Date(meeting.start).toLocaleString('de-DE', { month: 'short' })}</span>
+                                                    <span className="block text-xl font-bold text-app-text">{new Date(meeting.start).getDate()}</span>
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <Link to={`/meetings/${encodeUrl(meeting.id)}`} className="block font-bold text-gray-200 group-hover:text-red-400 transition-colors mb-1 truncate">
+                                                    <Link to={`/meetings/${encodeUrl(meeting.id)}`} className="mb-1 block truncate font-semibold text-app-text transition-colors group-hover:text-app-accent">
                                                         {meeting.name}
                                                     </Link>
-                                                    <div className="flex items-center text-sm text-gray-500">
+                                                    <div className="flex items-center text-sm text-app-muted">
                                                         <span className="mr-3">⏰ {new Date(meeting.start).toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'})}</span>
                                                         {typeof meeting.location === 'object' && meeting.location?.description && (
                                                             <span className="truncate">📍 {meeting.location.description}</span>
@@ -1464,7 +1551,7 @@ const Dashboard: React.FC = () => {
                                                 <FavoriteButton item={{ id: meeting.id, type: 'meeting', name: meeting.name, path: `/meetings/${encodeUrl(meeting.id)}`, info: formatDateTime(meeting.start) }} />
                                             </div>
                                         </div>
-                                    )) : <p className="p-6 text-gray-500 text-center">Keine bevorstehenden Sitzungen.</p>}
+                                    )) : <p className="p-6 text-center text-app-muted">Keine bevorstehenden Sitzungen.</p>}
                                 </div>
                             )}
                         </div>
@@ -1473,9 +1560,10 @@ const Dashboard: React.FC = () => {
 
                 <div className="space-y-8">
                     <FavoritesList />
+                    <AtlasDashboardTeaser />
                     <div>
-                        <h2 className="text-xl font-bold text-white mb-4">Aktivitäten</h2>
-                        <div className="bg-gray-800/40 border border-gray-700/50 rounded-2xl p-6 backdrop-blur-sm">
+                        <h2 className="mb-4 text-xl font-semibold text-app-text">Aktivitäten</h2>
+                        <div className="app-surface p-6">
                             <PartyActivityChart />
                         </div>
                     </div>
@@ -1588,8 +1676,8 @@ const GenericListPage: React.FC<GenericListPageProps> = ({ resource, title, subt
             {title && subtitle && <PageTitle title={title} subtitle={subtitle} />}
             {topContent}
 
-            <div className="mb-6 relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+            <div className="relative mb-6">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-app-muted">
                     <MagnifyingGlassIcon />
                 </div>
                 <input
@@ -1597,7 +1685,7 @@ const GenericListPage: React.FC<GenericListPageProps> = ({ resource, title, subt
                     value={currentQuery}
                     onChange={(e) => setCurrentQuery(e.target.value)}
                     placeholder={searchPlaceholder || "Suchen..."}
-                    className="w-full pl-10 pr-4 py-3 bg-gray-800/60 border border-gray-700 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent text-white placeholder-gray-500 transition-all shadow-sm"
+                    className="app-input pl-10"
                 />
             </div>
 
@@ -1605,44 +1693,42 @@ const GenericListPage: React.FC<GenericListPageProps> = ({ resource, title, subt
 
             {/* Results count badge */}
             {!isLoading && data && (
-                <p className="text-xs text-gray-500 mb-3">
+                <p className="mb-3 text-xs text-app-muted">
                     {data.pagination.totalElements} Ergebnisse
                     {(filter.q || filter.minDate || filter.maxDate || (fieldFilters && Object.keys(fieldFilters).length > 0)) && (
                         <button
                             onClick={() => { const p = new URLSearchParams(); navigate({ search: p.toString() }); setCurrentQuery(''); }}
-                            className="ml-2 text-red-400 hover:text-red-300 underline"
+                            className="ml-2 text-app-accent underline"
                         >Filter zurücksetzen</button>
                     )}
                 </p>
             )}
 
-            {/* Desktop Table View */}
-            <div className="hidden md:block bg-gray-800/40 border border-gray-700/50 rounded-2xl shadow-lg backdrop-blur-sm overflow-hidden">
+            <div className="app-surface hidden overflow-hidden md:block">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left text-gray-300">
-                        <thead className="bg-gray-900/50 text-gray-400 text-xs uppercase font-bold tracking-wider">
+                    <table className="w-full text-left text-app-text">
+                        <thead className="bg-app-surface-alt text-xs font-bold uppercase tracking-[0.16em] text-app-muted">
                             {renderItem("header")}
                         </thead>
-                        <tbody className="divide-y divide-gray-700/50">
+                        <tbody className="divide-y divide-app-border">
                             {isLoading && !data && <TableSkeleton columnClasses={columnClasses} />}
                             {displayData.map(item => renderItem(item))}
                             {!isLoading && data && data.data.length === 0 && (
-                                <tr><td colSpan={10} className="p-12 text-center text-gray-500">Keine Ergebnisse gefunden.</td></tr>
+                                <tr><td colSpan={10} className="p-12 text-center text-app-muted">Keine Ergebnisse gefunden.</td></tr>
                             )}
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            {/* Mobile Card View */}
             <div className="md:hidden space-y-4">
-                {isLoading && !data && [1,2,3].map(i => <div key={i} className="h-32 bg-gray-800/50 animate-pulse rounded-xl"></div>)}
+                {isLoading && !data && [1,2,3].map(i => <div key={i} className="h-32 animate-pulse rounded-xl bg-app-surface-alt"></div>)}
                 {displayData.map(item => renderCard ? renderCard(item) : (
-                    <div key={item.id} className="bg-gray-800/60 p-4 rounded-xl border border-gray-700">
-                        <p className="text-white font-bold">{item.name}</p>
+                    <div key={item.id} className="app-surface p-4">
+                        <p className="font-bold text-app-text">{item.name}</p>
                     </div>
                 ))}
-                {!isLoading && data && data.data.length === 0 && <div className="text-center text-gray-500 py-10">Keine Ergebnisse gefunden.</div>}
+                {!isLoading && data && data.data.length === 0 && <div className="py-10 text-center text-app-muted">Keine Ergebnisse gefunden.</div>}
             </div>
 
             {data && <Pagination currentPage={data.pagination.currentPage} totalPages={data.pagination.totalPages} onPageChange={handlePageChange} />}
@@ -1926,82 +2012,86 @@ const PaperDetailPage: React.FC = () => {
 };
 
 export const PapersPage: React.FC = () => {
+    const location = useLocation();
+    const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+    const hasDeepSearchParams = Boolean(
+        searchParams.get('deepQ') ||
+        searchParams.get('deepType') ||
+        searchParams.get('deepMinDate') ||
+        searchParams.get('deepMaxDate')
+    );
+    const [isDeepSearchActive, setIsDeepSearchActive] = useState(hasDeepSearchParams);
     const [pageItems, setPageItems] = useState<Paper[]>([]);
     const paperResults = usePaperResults(pageItems);
 
+    useEffect(() => {
+        setIsDeepSearchActive(hasDeepSearchParams);
+    }, [hasDeepSearchParams]);
+
     return (
-        <GenericListPage
-            resource="papers"
-            title="Vorlagen"
-            subtitle="Anträge & Mitteilungen"
-            sort="-date"
-            searchPlaceholder="Vorlage suchen..."
-            onData={setPageItems}
-            topContent={
-                <>
-                    <TrendingTopics />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                         <FilterSelect 
-                            label="Typ filtern" 
-                            paramName="paperType" 
-                            options={[
-                                { value: "Antrag", label: "Antrag" },
-                                { value: "Anfrage", label: "Anfrage" },
-                                { value: "Mitteilung", label: "Mitteilung" },
-                                { value: "Beschlussvorlage", label: "Beschlussvorlage" },
-                                { value: "Niederschrift", label: "Niederschrift" }
-                            ]}
-                            icon={<DocumentTextIcon />}
-                        />
-                        <DateRangeFilter />
-                    </div>
-                </>
-            }
-            columnClasses={['', 'hidden md:table-cell', 'hidden lg:table-cell']} 
-            renderItem={(item: Paper | "header") => {
-                if (item === "header") return <tr><th className="p-4 pl-6">Betreff</th><th className="p-4 hidden md:table-cell whitespace-nowrap">Datum</th><th className="p-4 hidden lg:table-cell whitespace-nowrap">Typ</th></tr>;
-                return (
-                    <tr key={item.id} className="hover:bg-white/5 border-b border-gray-700/50 last:border-0 group transition-colors">
-                        <td className="p-4 pl-6 font-medium relative pr-10">
-                            <Link to={`/papers/${encodeUrl(item.id)}`} className="text-gray-200 hover:text-red-400 font-bold block transition-colors mb-1">{item.name}</Link>
-                            <span className="text-xs text-gray-500 font-mono">{item.reference}</span>
-                            {paperResults[item.id] && (
-                                <div className="mt-1">
-                                    <span className="inline-block text-[10px] bg-green-900/30 text-green-400 px-2 py-0.5 rounded border border-green-900/50">
-                                        Ergebnis: {paperResults[item.id]}
-                                    </span>
-                                </div>
-                            )}
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <FavoriteButton item={{ id: item.id, type: 'paper', name: item.name, path: `/papers/${encodeUrl(item.id)}`, info: item.reference }} />
+        <div className="animate-in fade-in duration-300">
+            <PageTitle title="Vorlagen" subtitle="Anträge & Mitteilungen" />
+            <PaperDeepSearch onActiveChange={setIsDeepSearchActive} />
+
+            {!isDeepSearchActive && (
+                <GenericListPage
+                    resource="papers"
+                    sort="-date"
+                    searchPlaceholder="Vorlage suchen..."
+                    onData={setPageItems}
+                    topContent={
+                        <>
+                            <TrendingTopics />
+                            <DateRangeFilter />
+                        </>
+                    }
+                    columnClasses={['', 'hidden md:table-cell', 'hidden lg:table-cell']} 
+                    renderItem={(item: Paper | "header") => {
+                        if (item === "header") return <tr><th className="p-4 pl-6">Betreff</th><th className="p-4 hidden md:table-cell whitespace-nowrap">Datum</th><th className="p-4 hidden lg:table-cell whitespace-nowrap">Typ</th></tr>;
+                        return (
+                            <tr key={item.id} className="group border-b border-app-border transition-colors hover:bg-app-surface-alt/70 last:border-0">
+                                <td className="p-4 pl-6 font-medium relative pr-10">
+                                    <Link to={`/papers/${encodeUrl(item.id)}`} className="mb-1 block font-semibold text-app-text transition-colors hover:text-app-accent">{item.name}</Link>
+                                    <span className="font-mono text-xs text-app-muted">{item.reference}</span>
+                                    {paperResults[item.id] && (
+                                        <div className="mt-1">
+                                            <span className="app-badge-success">
+                                                Ergebnis: {paperResults[item.id]}
+                                            </span>
+                                        </div>
+                                    )}
+                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <FavoriteButton item={{ id: item.id, type: 'paper', name: item.name, path: `/papers/${encodeUrl(item.id)}`, info: item.reference }} />
+                                    </div>
+                                </td>
+                                <td className="p-4 hidden font-mono text-sm text-app-muted md:table-cell whitespace-nowrap">{formatDateOnly(item.date)}</td>
+                                <td className="p-4 hidden text-xs uppercase tracking-wide text-app-muted lg:table-cell whitespace-nowrap">
+                                    <span className="app-badge-muted">{item.paperType || 'Sonstige'}</span>
+                                </td>
+                            </tr>
+                        );
+                    }}
+                    renderCard={(item: Paper) => (
+                        <div key={item.id} className="app-surface relative flex flex-col gap-2 p-4">
+                             <div className="flex items-start justify-between">
+                                <span className="app-badge-info">{item.paperType || 'Vorlage'}</span>
+                                <FavoriteButton item={{ id: item.id, type: 'paper', name: item.name, path: `/papers/${encodeUrl(item.id)}` }} />
                             </div>
-                        </td>
-                        <td className="p-4 hidden md:table-cell whitespace-nowrap text-gray-400 font-mono text-sm">{formatDateOnly(item.date)}</td>
-                        <td className="p-4 hidden lg:table-cell whitespace-nowrap text-gray-400 text-xs uppercase tracking-wide">
-                            <span className="bg-gray-700/50 px-2 py-1 rounded">{item.paperType || 'Sonstige'}</span>
-                        </td>
-                    </tr>
-                );
-            }}
-            renderCard={(item: Paper) => (
-                <div key={item.id} className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4 flex flex-col gap-2 relative">
-                     <div className="flex justify-between items-start">
-                        <span className="text-[10px] uppercase font-bold text-indigo-400 bg-indigo-900/20 px-2 py-0.5 rounded">{item.paperType || 'Vorlage'}</span>
-                        <FavoriteButton item={{ id: item.id, type: 'paper', name: item.name, path: `/papers/${encodeUrl(item.id)}` }} />
-                    </div>
-                    <Link to={`/papers/${encodeUrl(item.id)}`} className="text-base font-bold text-white leading-tight mt-1">{item.name}</Link>
-                    {paperResults[item.id] && (
-                        <span className="inline-block text-[10px] bg-green-900/30 text-green-400 px-2 py-0.5 rounded border border-green-900/50">
-                            Ergebnis: {paperResults[item.id]}
-                        </span>
+                            <Link to={`/papers/${encodeUrl(item.id)}`} className="mt-1 text-base font-semibold leading-tight text-app-text">{item.name}</Link>
+                            {paperResults[item.id] && (
+                                <span className="app-badge-success">
+                                    Ergebnis: {paperResults[item.id]}
+                                </span>
+                            )}
+                            <div className="mt-2 flex items-center justify-between">
+                                <span className="font-mono text-xs text-app-muted">{item.reference}</span>
+                                <span className="text-xs text-app-muted">{formatDateOnly(item.date)}</span>
+                            </div>
+                        </div>
                     )}
-                    <div className="flex justify-between items-center mt-2">
-                        <span className="text-xs text-gray-500 font-mono">{item.reference}</span>
-                        <span className="text-xs text-gray-400">{formatDateOnly(item.date)}</span>
-                    </div>
-                </div>
+                />
             )}
-        />
+        </div>
     );
 };
 
@@ -2147,261 +2237,6 @@ const useArchiveMeetingsData = ({
         isHistoryMode,
         historyMetadata: historyIndex?.metadata || null,
     };
-};
-
-export const ArchiveDeepSearch: React.FC = () => {
-    const [query, setQuery] = useState('');
-    const [minDate, setMinDate] = useState('');
-    const [maxDate, setMaxDate] = useState('');
-    const [currentPage, setCurrentPage] = useState(1);
-    const [index, setIndex] = useState<ArchiveMeetingIndexDocument | null>(null);
-    const [isLoadingIndex, setIsLoadingIndex] = useState(false);
-    const [loadError, setLoadError] = useState<string | null>(null);
-
-    const deferredQuery = useDeferredValue(query);
-    const deferredMinDate = useDeferredValue(minDate);
-    const deferredMaxDate = useDeferredValue(maxDate);
-    const validationError = useMemo(
-        () => validateDateRange(minDate || undefined, maxDate || undefined),
-        [maxDate, minDate],
-    );
-
-    const ensureIndexLoaded = useCallback(async () => {
-        if (index || isLoadingIndex) return;
-        setIsLoadingIndex(true);
-        setLoadError(null);
-        try {
-            const nextIndex = await loadArchiveMeetingIndex();
-            setIndex(nextIndex);
-        } catch (error) {
-            setLoadError(error instanceof Error ? error.message : 'Archivindex konnte nicht geladen werden.');
-        } finally {
-            setIsLoadingIndex(false);
-        }
-    }, [index, isLoadingIndex]);
-
-    const hasSearchInput = Boolean(
-        deferredQuery.trim() || deferredMinDate.trim() || deferredMaxDate.trim(),
-    );
-
-    useEffect(() => {
-        setCurrentPage(1);
-    }, [maxDate, minDate, query]);
-
-    const resultPage = useMemo(() => {
-        if (!index || !hasSearchInput || validationError) {
-            return {
-                items: [] as ArchiveMeetingIndexItem[],
-                totalMatches: 0,
-                currentPage: 1,
-                totalPages: 1,
-            };
-        }
-
-        let result = queryArchiveMeetingIndex(index, {
-            query: deferredQuery,
-            minDate: deferredMinDate,
-            maxDate: deferredMaxDate,
-            offset: (currentPage - 1) * ARCHIVE_DEEP_SEARCH_ITEMS_PER_PAGE,
-            limit: ARCHIVE_DEEP_SEARCH_ITEMS_PER_PAGE,
-        });
-
-        const totalPages = Math.max(
-            1,
-            Math.ceil(result.totalMatches / ARCHIVE_DEEP_SEARCH_ITEMS_PER_PAGE),
-        );
-        const safePage = Math.min(Math.max(1, currentPage), totalPages);
-
-        if (safePage !== currentPage) {
-            result = queryArchiveMeetingIndex(index, {
-                query: deferredQuery,
-                minDate: deferredMinDate,
-                maxDate: deferredMaxDate,
-                offset: (safePage - 1) * ARCHIVE_DEEP_SEARCH_ITEMS_PER_PAGE,
-                limit: ARCHIVE_DEEP_SEARCH_ITEMS_PER_PAGE,
-            });
-        }
-
-        return {
-            ...result,
-            currentPage: safePage,
-            totalPages,
-        };
-    }, [
-        currentPage,
-        deferredMaxDate,
-        deferredMinDate,
-        deferredQuery,
-        hasSearchInput,
-        index,
-        validationError,
-    ]);
-
-    useEffect(() => {
-        if (resultPage.currentPage !== currentPage) {
-            setCurrentPage(resultPage.currentPage);
-        }
-    }, [currentPage, resultPage.currentPage]);
-
-    return (
-        <div className="bg-gradient-to-br from-amber-900/20 to-red-900/10 border border-amber-500/20 rounded-2xl p-5 mb-6 backdrop-blur-sm">
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
-                <div>
-                    <h3 className="text-sm font-bold text-gray-100 flex items-center gap-2">
-                        <ArchiveBoxIcon /> Archiv-Tiefensuche
-                    </h3>
-                    <p className="text-xs text-gray-400 mt-1">
-                        Laedt einen kompakten Archivindex nur bei Bedarf und durchsucht alte Sitzungen separat vom normalen Listenfilter.
-                    </p>
-                </div>
-                <button
-                    type="button"
-                    onClick={() => void ensureIndexLoaded()}
-                    disabled={Boolean(index) || isLoadingIndex}
-                    className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:bg-amber-900/40 disabled:text-amber-100/60 disabled:cursor-not-allowed text-white text-xs font-bold rounded-lg transition-colors"
-                >
-                    {index ? 'Index geladen' : isLoadingIndex ? 'Laedt...' : 'Tiefensuche aktivieren'}
-                </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_180px_180px] gap-3 mb-2">
-                <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-500">
-                        <MagnifyingGlassIcon />
-                    </div>
-                    <input
-                        type="search"
-                        value={query}
-                        onFocus={() => void ensureIndexLoaded()}
-                        onChange={(e) => setQuery(e.target.value)}
-                        placeholder="Alte Sitzungen, Themen oder Orte durchsuchen..."
-                        className="w-full pl-10 pr-4 py-3 bg-gray-900/60 border border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent text-white placeholder-gray-500 transition-all"
-                    />
-                </div>
-                <div>
-                    <label className="block text-[10px] uppercase text-gray-500 font-bold mb-2">Von</label>
-                    <input
-                        type="date"
-                        aria-label="Von"
-                        value={minDate}
-                        onFocus={() => void ensureIndexLoaded()}
-                        onChange={(e) => setMinDate(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-900/60 border border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent text-white transition-all"
-                    />
-                </div>
-                <div>
-                    <label className="block text-[10px] uppercase text-gray-500 font-bold mb-2">Bis</label>
-                    <input
-                        type="date"
-                        aria-label="Bis"
-                        value={maxDate}
-                        onFocus={() => void ensureIndexLoaded()}
-                        onChange={(e) => setMaxDate(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-900/60 border border-gray-700 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-transparent text-white transition-all"
-                    />
-                </div>
-            </div>
-
-            <p className="text-[11px] text-amber-200/80 mb-4">
-                Nur <span className="font-semibold">Bis</span> ausfuellen, um Sitzungen vor einem Stichtag zu finden.
-            </p>
-
-            {validationError && (
-                <p className="text-xs text-red-300 bg-red-900/30 border border-red-800 rounded-md px-3 py-2 mb-4">
-                    {validationError}
-                </p>
-            )}
-
-            {loadError && (
-                <p className="text-xs text-red-300 bg-red-900/30 border border-red-800 rounded-md px-3 py-2 mb-4">
-                    {loadError}
-                </p>
-            )}
-
-            {index && (
-                <div className="flex flex-wrap gap-2 text-[11px] text-gray-400 mb-4">
-                    <span className="px-2 py-1 rounded-full bg-gray-900/60 border border-gray-700">
-                        {index.metadata.itemCount} archivierte Sitzungen
-                    </span>
-                    <span className="px-2 py-1 rounded-full bg-gray-900/60 border border-gray-700">
-                        Stand {formatDateOnly(index.metadata.generatedAt)}
-                    </span>
-                    {index.metadata.isPartial && (
-                        <span className="px-2 py-1 rounded-full bg-amber-900/30 text-amber-200 border border-amber-700/50">
-                            Teilindex: {index.metadata.stopReason || 'Quelle war nicht vollstaendig erreichbar'}
-                        </span>
-                    )}
-                </div>
-            )}
-
-            {!index && !isLoadingIndex && !loadError && (
-                <p className="text-xs text-gray-500">
-                    Die Tiefensuche bleibt inaktiv, bis Sie sie explizit laden. So bleibt das normale Archiv schnell.
-                </p>
-            )}
-
-            {index && !hasSearchInput && !validationError && (
-                <p className="text-xs text-gray-500">
-                    Geben Sie einen Suchbegriff oder einen Zeitraum ein, um alte Archivsitzungen ueber den kompakten Index zu finden.
-                </p>
-            )}
-
-            {index && hasSearchInput && !validationError && (
-                <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs text-gray-400">
-                            {resultPage.totalMatches > resultPage.items.length
-                                ? `${resultPage.items.length} von ${resultPage.totalMatches} Treffern`
-                                : `${resultPage.totalMatches} Treffer`}
-                        </p>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setQuery('');
-                                setMinDate('');
-                                setMaxDate('');
-                                setCurrentPage(1);
-                            }}
-                            className="text-xs text-amber-300 hover:text-amber-200"
-                        >
-                            Eingaben leeren
-                        </button>
-                    </div>
-
-                    {resultPage.items.length > 0 ? (
-                        <>
-                            {resultPage.items.map((item) => (
-                                <Link
-                                    key={item.id}
-                                    to={`/meetings/${encodeUrl(item.id)}`}
-                                    className="block bg-gray-900/50 hover:bg-gray-900/80 border border-gray-700/60 rounded-xl p-4 transition-colors"
-                                >
-                                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-                                        <div className="min-w-0">
-                                            <p className="font-bold text-white truncate">{item.name}</p>
-                                            <p className="text-xs text-gray-500 mt-1">
-                                                {item.location || 'Ort unbekannt'}
-                                            </p>
-                                        </div>
-                                        <div className="text-xs text-amber-300 font-mono whitespace-nowrap">
-                                            {formatDateTime(item.start)}
-                                        </div>
-                                    </div>
-                                </Link>
-                            ))}
-                            <Pagination
-                                currentPage={resultPage.currentPage}
-                                totalPages={resultPage.totalPages}
-                                onPageChange={setCurrentPage}
-                            />
-                        </>
-                    ) : (
-                        <p className="text-sm text-gray-500 py-2">Keine Treffer im Archivindex gefunden.</p>
-                    )}
-                </div>
-            )}
-        </div>
-    );
 };
 
 export const MeetingArchive: React.FC = () => {
@@ -2696,25 +2531,25 @@ export const MeetingsPage: React.FC = () => {
       renderItem={(item: Meeting | "header") => {
         if (item === "header") return <tr><th className="p-4 pl-6">Name</th><th className="p-4 hidden md:table-cell whitespace-nowrap">Datum</th></tr>;
         return (
-          <tr key={item.id} className="hover:bg-white/5 border-b border-gray-700/50 last:border-0 group transition-colors">
+          <tr key={item.id} className="group border-b border-app-border transition-colors hover:bg-app-surface-alt/70 last:border-0">
             <td className="p-4 pl-6 font-medium relative pr-10">
-              <Link to={`/meetings/${encodeUrl(item.id)}`} className="text-gray-200 hover:text-red-400 font-bold block transition-colors">{item.name}</Link>
+              <Link to={`/meetings/${encodeUrl(item.id)}`} className="block font-semibold text-app-text transition-colors hover:text-app-accent">{item.name}</Link>
               <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                 <FavoriteButton item={{ id: item.id, type: 'meeting', name: item.name, path: `/meetings/${encodeUrl(item.id)}`, info: formatDateTime(item.start) }} />
               </div>
             </td>
-            <td className="p-4 hidden md:table-cell whitespace-nowrap text-gray-400 font-mono text-sm">{formatDateTime(item.start)}</td>
+            <td className="p-4 hidden font-mono text-sm text-app-muted md:table-cell whitespace-nowrap">{formatDateTime(item.start)}</td>
           </tr>
         );
       }}
       renderCard={(item: Meeting) => (
-        <div key={item.id} className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4 flex flex-col gap-2 relative shadow-sm">
-          <div className="flex justify-between items-start">
-            <span className="text-xs font-bold text-red-400 bg-red-900/10 px-2 py-1 rounded uppercase tracking-wider">{formatDateOnly(item.start)}</span>
+        <div key={item.id} className="app-surface relative flex flex-col gap-2 p-4 shadow-sm">
+          <div className="flex items-start justify-between">
+            <span className="app-badge-accent">{formatDateOnly(item.start)}</span>
             <FavoriteButton item={{ id: item.id, type: 'meeting', name: item.name, path: `/meetings/${encodeUrl(item.id)}` }} />
           </div>
-          <Link to={`/meetings/${encodeUrl(item.id)}`} className="text-lg font-bold text-white leading-tight mt-1">{item.name}</Link>
-          <div className="flex items-center text-gray-500 text-sm mt-2">
+          <Link to={`/meetings/${encodeUrl(item.id)}`} className="mt-1 text-lg font-semibold leading-tight text-app-text">{item.name}</Link>
+          <div className="mt-2 flex items-center text-sm text-app-muted">
             <span className="mr-4">⏰ {item.start ? new Date(item.start).toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'}) : '--:--'}</span>
             {typeof item.location === 'object' && <span className="truncate">📍 {item.location.description}</span>}
           </div>
@@ -2789,26 +2624,26 @@ export const OrganizationsPage: React.FC = () => {
             renderItem={(item: Organization | "header") => {
                 if (item === "header") return <tr><th className="p-4 pl-6">Name</th><th className="p-4 hidden md:table-cell">Typ</th><th className="p-4 hidden sm:table-cell">Art</th></tr>;
                 return (
-                    <tr key={item.id} className="hover:bg-white/5 border-b border-gray-700/50 last:border-0 group transition-colors">
+                    <tr key={item.id} className="group border-b border-app-border transition-colors hover:bg-app-surface-alt/70 last:border-0">
                         <td className="p-4 pl-6 font-medium relative pr-10">
-                            <span className="text-gray-200 font-bold">{item.name}</span>
+                            <span className="font-semibold text-app-text">{item.name}</span>
                             <div className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <FavoriteButton item={{ id: item.id, type: 'organization', name: item.name, path: `/organizations`, info: item.classification || item.organizationType }} />
                             </div>
                         </td>
-                        <td className="p-4 hidden md:table-cell text-gray-400 text-sm">{item.organizationType}</td>
-                        <td className="p-4 hidden sm:table-cell text-gray-500 text-xs uppercase tracking-wide">{item.classification}</td>
+                        <td className="hidden p-4 text-sm text-app-muted md:table-cell">{item.organizationType}</td>
+                        <td className="hidden p-4 text-xs uppercase tracking-wide text-app-muted sm:table-cell">{item.classification}</td>
                     </tr>
                 );
             }}
             renderCard={(item: Organization) => (
-                <div key={item.id} className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4">
-                    <div className="flex justify-between items-start mb-2">
-                        <span className="text-[10px] uppercase font-bold text-indigo-400 bg-indigo-900/20 px-2 py-0.5 rounded">{item.classification || item.organizationType || 'Gremium'}</span>
+                <div key={item.id} className="app-surface p-4">
+                    <div className="mb-2 flex items-start justify-between">
+                        <span className="app-badge-info">{item.classification || item.organizationType || 'Gremium'}</span>
                         <FavoriteButton item={{ id: item.id, type: 'organization', name: item.name, path: `/organizations` }} />
                     </div>
-                    <p className="text-white font-bold">{item.name}</p>
-                    {item.classification && <p className="text-xs text-gray-500 mt-1">{item.classification}</p>}
+                    <p className="font-semibold text-app-text">{item.name}</p>
+                    {item.classification && <p className="mt-1 text-xs text-app-muted">{item.classification}</p>}
                 </div>
             )}
         />
@@ -2817,17 +2652,53 @@ export const OrganizationsPage: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <Router initialEntries={['/']}>
+    <Router>
       <Layout>
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route
+            path="/atlas"
+            element={
+              <Suspense fallback={<RouteLoadingFallback />}>
+                <LazyAtlasPage />
+              </Suspense>
+            }
+          />
           <Route path="/meetings" element={<MeetingsPage />} />
 
-            <Route path="/meetings/:id" element={<MeetingDetailPage />} />
-            <Route path="/archive" element={<MeetingArchive />} />
+            <Route
+              path="/meetings/:id"
+              element={
+                <Suspense fallback={<RouteLoadingFallback />}>
+                  <LazyMeetingDetailPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/archive"
+              element={
+                <Suspense fallback={<RouteLoadingFallback />}>
+                  <LazyMeetingArchive />
+                </Suspense>
+              }
+            />
             <Route path="/papers" element={<PapersPage />} />
-            <Route path="/papers/:id" element={<PaperDetailPage />} />
-            <Route path="/search" element={<SearchPage />} />
+            <Route
+              path="/papers/:id"
+              element={
+                <Suspense fallback={<RouteLoadingFallback />}>
+                  <LazyPaperDetailPage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/search"
+              element={
+                <Suspense fallback={<RouteLoadingFallback />}>
+                  <LazySearchPage />
+                </Suspense>
+              }
+            />
 
           <Route path="/people" element={<GenericListPage
             resource="people"
@@ -2865,8 +2736,22 @@ const App: React.FC = () => {
 
             <Route path="/organizations" element={<OrganizationsPage />} />
             
-            <Route path="/mcp" element={<McpGuidePage />} />
-            <Route path="/help" element={<HelpPage />} />
+            <Route
+              path="/mcp"
+              element={
+                <Suspense fallback={<RouteLoadingFallback />}>
+                  <LazyMcpGuidePage />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/help"
+              element={
+                <Suspense fallback={<RouteLoadingFallback />}>
+                  <LazyHelpPage />
+                </Suspense>
+              }
+            />
         </Routes>
       </Layout>
     </Router>

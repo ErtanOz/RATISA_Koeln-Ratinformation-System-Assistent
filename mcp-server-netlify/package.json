@@ -10,8 +10,17 @@
     "start:http": "node build/dev-http.js"
   },
   "dependencies": {
+    "@google/genai": "^1.30.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "@openrouter/sdk": "^0.4.0",
+    "dotenv": "^17.2.3",
     "serverless-http": "^3.2.0"
+  },
+  "overrides": {
+    "@hono/node-server": "1.19.11",
+    "ajv": "8.18.0",
+    "express-rate-limit": "8.3.1",
+    "hono": "4.12.7"
   },
   "devDependencies": {
     "@types/express": "^5.0.0",

@@ -9,6 +9,13 @@ const ALLOW_METHODS = "GET,POST,OPTIONS";
 const ALLOW_HEADERS =
   "Content-Type,Accept,Authorization,x-mcp-api-key,mcp-session-id,last-event-id";
 
+const SECURITY_HEADERS: Record<string, string> = {
+  "Permissions-Policy": "camera=(), geolocation=(), microphone=()",
+  "Referrer-Policy": "strict-origin-when-cross-origin",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+};
+
 function parseAllowedOrigins(): string[] {
   const raw = process.env.MCP_ALLOWED_ORIGINS;
   if (!raw || !raw.trim()) {
@@ -64,6 +71,16 @@ export function applyCorsAndMaybeHandlePreflight(
   }
 
   return false;
+}
+
+export function applySecurityHeaders(req: Request, res: Response): void {
+  Object.entries(SECURITY_HEADERS).forEach(([header, value]) => {
+    res.setHeader(header, value);
+  });
+
+  if (req.path.startsWith("/ai/") || req.path === "/mcp") {
+    res.setHeader("Cache-Control", "no-store");
+  }
 }
 
 export function isApiKeyAuthorized(req: Request, res: Response): boolean {

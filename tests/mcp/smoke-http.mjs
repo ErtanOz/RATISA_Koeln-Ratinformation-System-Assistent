@@ -7,6 +7,48 @@ function assert(condition, message) {
   }
 }
 
+function parseToolTextResult(result) {
+  if (!Array.isArray(result?.content)) {
+    return [];
+  }
+
+  const textPart = result.content.find((part) => part.type === "text");
+  if (!textPart || typeof textPart.text !== "string") {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(textPart.text);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+async function callTool(endpoint, apiKey, id, name, args) {
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+      "x-mcp-api-key": apiKey,
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id,
+      method: "tools/call",
+      params: {
+        name,
+        arguments: args,
+      },
+    }),
+  });
+
+  assert(response.status === 200, `Expected 200 for tools/call ${name}.`);
+  const payload = await response.json();
+  return payload.result;
+}
+
 async function waitForServerReady(childProcess, timeoutMs = 20_000) {
   let ready = false;
   let stdout = '';
@@ -105,6 +147,31 @@ async function run() {
     assert(
       preflightResponse.headers.get('access-control-allow-origin') === 'http://localhost:3000',
       'Expected Access-Control-Allow-Origin for allowed origin.'
+    );
+
+    const weirdQueryResult = await callTool(
+      endpoint,
+      apiKey,
+      3,
+      "search_papers",
+      { query: "zzzz_UNLIKELY_QUERY_2026_ABC987", limit: 25 },
+    );
+    const normalQueryResult = await callTool(
+      endpoint,
+      apiKey,
+      4,
+      "search_papers",
+      { query: "Radverkehr", limit: 25 },
+    );
+
+    const weirdItems = parseToolTextResult(weirdQueryResult);
+    const normalItems = parseToolTextResult(normalQueryResult);
+
+    const weirdSignature = JSON.stringify(weirdItems.slice(0, 5));
+    const normalSignature = JSON.stringify(normalItems.slice(0, 5));
+    assert(
+      weirdSignature !== normalSignature,
+      "search_papers regression: unrelated and normal query returned same top results.",
     );
 
     console.log('HTTP smoke test passed.');

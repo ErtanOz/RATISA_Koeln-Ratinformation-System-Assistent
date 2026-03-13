@@ -1,0 +1,1067 @@
+{
+  "metadata": {
+    "generatedAt": "2026-03-12T19:16:01.442Z",
+    "source": "https://buergerinfo.stadt-koeln.de/oparl/bodies/stadtverwaltung_koeln",
+    "paperCount": 40359,
+    "organizationCount": 95,
+    "yearCount": 16
+  },
+  "years": {
+    "2011": {
+      "stats": [
+        {
+          "name": "Linke",
+          "count": 2,
+          "percentage": 50
+        },
+        {
+          "name": "FRAKTION",
+          "count": 1,
+          "percentage": 25
+        },
+        {
+          "name": "SPD",
+          "count": 1,
+          "percentage": 25
+        }
+      ],
+      "motionCount": 3,
+      "mentionCount": 4
+    },
+    "2012": {
+      "stats": [
+        {
+          "name": "FRAKTION",
+          "count": 38,
+          "percentage": 50.66666666666667
+        },
+        {
+          "name": "SPD",
+          "count": 18,
+          "percentage": 24
+        },
+        {
+          "name": "CDU",
+          "count": 7,
+          "percentage": 9.333333333333334
+        },
+        {
+          "name": "Unbekannt",
+          "count": 5,
+          "percentage": 6.666666666666667
+        },
+        {
+          "name": "FDP",
+          "count": 3,
+          "percentage": 4
+        },
+        {
+          "name": "FDP/KSG",
+          "count": 3,
+          "percentage": 4
+        },
+        {
+          "name": "Linke",
+          "count": 1,
+          "percentage": 1.3333333333333335
+        }
+      ],
+      "motionCount": 45,
+      "mentionCount": 75
+    },
+    "2013": {
+      "stats": [
+        {
+          "name": "FRAKTION",
+          "count": 17,
+          "percentage": 30.909090909090907
+        },
+        {
+          "name": "SPD",
+          "count": 13,
+          "percentage": 23.636363636363637
+        },
+        {
+          "name": "Unbekannt",
+          "count": 8,
+          "percentage": 14.545454545454545
+        },
+        {
+          "name": "CDU",
+          "count": 7,
+          "percentage": 12.727272727272727
+        },
+        {
+          "name": "Grüne",
+          "count": 4,
+          "percentage": 7.2727272727272725
+        },
+        {
+          "name": "FDP",
+          "count": 2,
+          "percentage": 3.6363636363636362
+        },
+        {
+          "name": "FDP/KSG",
+          "count": 2,
+          "percentage": 3.6363636363636362
+        },
+        {
+          "name": "Linke",
+          "count": 2,
+          "percentage": 3.6363636363636362
+        }
+      ],
+      "motionCount": 38,
+      "mentionCount": 55
+    },
+    "2014": {
+      "stats": [
+        {
+          "name": "SPD",
+          "count": 30,
+          "percentage": 30.303030303030305
+        },
+        {
+          "name": "Grüne",
+          "count": 20,
+          "percentage": 20.2020202020202
+        },
+        {
+          "name": "CDU",
+          "count": 15,
+          "percentage": 15.151515151515152
+        },
+        {
+          "name": "FRAKTION",
+          "count": 14,
+          "percentage": 14.14141414141414
+        },
+        {
+          "name": "Unbekannt",
+          "count": 11,
+          "percentage": 11.11111111111111
+        },
+        {
+          "name": "FDP",
+          "count": 4,
+          "percentage": 4.040404040404041
+        },
+        {
+          "name": "FDP/KSG",
+          "count": 4,
+          "percentage": 4.040404040404041
+        },
+        {
+          "name": "Linke",
+          "count": 1,
+          "percentage": 1.0101010101010102
+        }
+      ],
+      "motionCount": 80,
+      "mentionCount": 99
+    },
+    "2015": {
+      "stats": [
+        {
+          "name": "Grüne",
+          "count": 44,
+          "percentage": 28.205128205128204
+        },
+        {
+          "name": "SPD",
+          "count": 39,
+          "percentage": 25
+        },
+        {
+          "name": "CDU",
+          "count": 28,
+          "percentage": 17.94871794871795
+        },
+        {
+          "name": "FDP",
+          "count": 13,
+          "percentage": 8.333333333333332
+        },
+        {
+          "name": "FDP/KSG",
+          "count": 13,
+          "percentage": 8.333333333333332
+        },
+        {
+          "name": "Unbekannt",
+          "count": 8,
+          "percentage": 5.128205128205128
+        },
+        {
+          "name": "Linke",
+          "count": 6,
+          "percentage": 3.8461538461538463
+        },
+        {
+          "name": "Piraten",
+          "count": 5,
+          "percentage": 3.205128205128205
+        }
+      ],
+      "motionCount": 137,
+      "mentionCount": 156
+    },
+    "2016": {
+      "stats": [
+        {
+          "name": "SPD",
+          "count": 54,
+          "percentage": 24.545454545454547
+        },
+        {
+          "name": "Grüne",
+          "count": 50,
+          "percentage": 22.727272727272727
+        },
+        {
+          "name": "CDU",
+          "count": 44,
+          "percentage": 20
+        },
+        {
+          "name": "FDP",
+          "count": 19,
+          "percentage": 8.636363636363637
+        },
+        {
+          "name": "FDP/KSG",
+          "count": 19,
+          "percentage": 8.636363636363637
+        },
+        {
+          "name": "Unbekannt",
+          "count": 12,
+          "percentage": 5.454545454545454
+        },
+        {
+          "name": "DEINE FREUNDE",
+          "count": 7,
+          "percentage": 3.1818181818181817
+        },
+        {
+          "name": "Freie Wähler Köln",
+          "count": 7,
+          "percentage": 3.1818181818181817
+        },
+        {
+          "name": "Linke",
+          "count": 7,
+          "percentage": 3.1818181818181817
+        },
+        {
+          "name": "Piraten",
+          "count": 1,
+          "percentage": 0.45454545454545453
+        }
+      ],
+      "motionCount": 198,
+      "mentionCount": 220
+    },
+    "2017": {
+      "stats": [
+        {
+          "name": "SPD",
+          "count": 300,
+          "percentage": 19.206145966709347
+        },
+        {
+          "name": "Unbekannt",
+          "count": 283,
+          "percentage": 18.11779769526248
+        },
+        {
+          "name": "Grüne",
+          "count": 232,
+          "percentage": 14.852752880921896
+        },
+        {
+          "name": "CDU",
+          "count": 225,
+          "percentage": 14.404609475032009
+        },
+        {
+          "name": "FRAKTION",
+          "count": 178,
+          "percentage": 11.395646606914212
+        },
+        {
+          "name": "FDP",
+          "count": 104,
+          "percentage": 6.658130601792574
+        },
+        {
+          "name": "FDP/KSG",
+          "count": 104,
+          "percentage": 6.658130601792574
+        },
+        {
+          "name": "Linke",
+          "count": 77,
+          "percentage": 4.929577464788732
+        },
+        {
+          "name": "AfD",
+          "count": 23,
+          "percentage": 1.47247119078105
+        },
+        {
+          "name": "Freie Wähler Köln",
+          "count": 14,
+          "percentage": 0.8962868117797695
+        },
+        {
+          "name": "Piraten",
+          "count": 13,
+          "percentage": 0.8322663252240717
+        },
+        {
+          "name": "DEINE FREUNDE",
+          "count": 8,
+          "percentage": 0.5121638924455826
+        },
+        {
+          "name": "SB",
+          "count": 1,
+          "percentage": 0.06402048655569782
+        }
+      ],
+      "motionCount": 1182,
+      "mentionCount": 1562
+    },
+    "2018": {
+      "stats": [
+        {
+          "name": "SPD",
+          "count": 279,
+          "percentage": 18.813216453135535
+        },
+        {
+          "name": "Unbekannt",
+          "count": 269,
+          "percentage": 18.138907619689817
+        },
+        {
+          "name": "Grüne",
+          "count": 217,
+          "percentage": 14.632501685772084
+        },
+        {
+          "name": "CDU",
+          "count": 202,
+          "percentage": 13.621038435603506
+        },
+        {
+          "name": "FRAKTION",
+          "count": 186,
+          "percentage": 12.542144302090358
+        },
+        {
+          "name": "FDP",
+          "count": 100,
+          "percentage": 6.743088334457181
+        },
+        {
+          "name": "FDP/KSG",
+          "count": 100,
+          "percentage": 6.743088334457181
+        },
+        {
+          "name": "Linke",
+          "count": 73,
+          "percentage": 4.922454484153742
+        },
+        {
+          "name": "DEINE FREUNDE",
+          "count": 14,
+          "percentage": 0.9440323668240054
+        },
+        {
+          "name": "Freie Wähler Köln",
+          "count": 14,
+          "percentage": 0.9440323668240054
+        },
+        {
+          "name": "AfD",
+          "count": 13,
+          "percentage": 0.8766014834794336
+        },
+        {
+          "name": "Bunt",
+          "count": 9,
+          "percentage": 0.6068779501011463
+        },
+        {
+          "name": "Piraten",
+          "count": 5,
+          "percentage": 0.33715441672285906
+        },
+        {
+          "name": "pro Köln",
+          "count": 1,
+          "percentage": 0.06743088334457181
+        },
+        {
+          "name": "RW",
+          "count": 1,
+          "percentage": 0.06743088334457181
+        }
+      ],
+      "motionCount": 1088,
+      "mentionCount": 1483
+    },
+    "2019": {
+      "stats": [
+        {
+          "name": "Unbekannt",
+          "count": 301,
+          "percentage": 20.093457943925234
+        },
+        {
+          "name": "SPD",
+          "count": 255,
+          "percentage": 17.022696929238982
+        },
+        {
+          "name": "CDU",
+          "count": 215,
+          "percentage": 14.352469959946596
+        },
+        {
+          "name": "FRAKTION",
+          "count": 193,
+          "percentage": 12.88384512683578
+        },
+        {
+          "name": "Grüne",
+          "count": 186,
+          "percentage": 12.416555407209612
+        },
+        {
+          "name": "FDP",
+          "count": 105,
+          "percentage": 7.009345794392523
+        },
+        {
+          "name": "FDP/KSG",
+          "count": 105,
+          "percentage": 7.009345794392523
+        },
+        {
+          "name": "Linke",
+          "count": 83,
+          "percentage": 5.540720961281709
+        },
+        {
+          "name": "DEINE FREUNDE",
+          "count": 22,
+          "percentage": 1.4686248331108143
+        },
+        {
+          "name": "AfD",
+          "count": 21,
+          "percentage": 1.4018691588785046
+        },
+        {
+          "name": "Freie Wähler Köln",
+          "count": 7,
+          "percentage": 0.46728971962616817
+        },
+        {
+          "name": "Bunt",
+          "count": 4,
+          "percentage": 0.26702269692923897
+        },
+        {
+          "name": "Piraten",
+          "count": 1,
+          "percentage": 0.06675567423230974
+        }
+      ],
+      "motionCount": 1080,
+      "mentionCount": 1498
+    },
+    "2020": {
+      "stats": [
+        {
+          "name": "Unbekannt",
+          "count": 276,
+          "percentage": 21.51208106001559
+        },
+        {
+          "name": "SPD",
+          "count": 218,
+          "percentage": 16.99142634450507
+        },
+        {
+          "name": "CDU",
+          "count": 166,
+          "percentage": 12.93842556508184
+        },
+        {
+          "name": "Grüne",
+          "count": 163,
+          "percentage": 12.704598597038192
+        },
+        {
+          "name": "FRAKTION",
+          "count": 155,
+          "percentage": 12.081060015588465
+        },
+        {
+          "name": "FDP",
+          "count": 89,
+          "percentage": 6.936866718628215
+        },
+        {
+          "name": "FDP/KSG",
+          "count": 89,
+          "percentage": 6.936866718628215
+        },
+        {
+          "name": "Linke",
+          "count": 80,
+          "percentage": 6.235385814497272
+        },
+        {
+          "name": "AfD",
+          "count": 14,
+          "percentage": 1.0911925175370227
+        },
+        {
+          "name": "DEINE FREUNDE",
+          "count": 13,
+          "percentage": 1.0132501948558068
+        },
+        {
+          "name": "Freie Wähler Köln",
+          "count": 7,
+          "percentage": 0.5455962587685114
+        },
+        {
+          "name": "DPart",
+          "count": 5,
+          "percentage": 0.3897116134060795
+        },
+        {
+          "name": "PARTEI",
+          "count": 5,
+          "percentage": 0.3897116134060795
+        },
+        {
+          "name": "KF",
+          "count": 3,
+          "percentage": 0.23382696804364772
+        }
+      ],
+      "motionCount": 962,
+      "mentionCount": 1283
+    },
+    "2021": {
+      "stats": [
+        {
+          "name": "Unbekannt",
+          "count": 413,
+          "percentage": 17.404129793510325
+        },
+        {
+          "name": "SPD",
+          "count": 381,
+          "percentage": 16.055625790139064
+        },
+        {
+          "name": "Grüne",
+          "count": 296,
+          "percentage": 12.473662031184155
+        },
+        {
+          "name": "FRAKTION",
+          "count": 278,
+          "percentage": 11.71512852928782
+        },
+        {
+          "name": "CDU",
+          "count": 260,
+          "percentage": 10.956595027391486
+        },
+        {
+          "name": "FDP",
+          "count": 172,
+          "percentage": 7.248209018120523
+        },
+        {
+          "name": "FDP/KSG",
+          "count": 172,
+          "percentage": 7.248209018120523
+        },
+        {
+          "name": "Linke",
+          "count": 151,
+          "percentage": 6.363253265908134
+        },
+        {
+          "name": "PARTEI",
+          "count": 73,
+          "percentage": 3.076274757690687
+        },
+        {
+          "name": "DPart",
+          "count": 72,
+          "percentage": 3.034134007585335
+        },
+        {
+          "name": "AfD",
+          "count": 50,
+          "percentage": 2.107037505267594
+        },
+        {
+          "name": "Volt",
+          "count": 33,
+          "percentage": 1.390644753476612
+        },
+        {
+          "name": "KF",
+          "count": 14,
+          "percentage": 0.5899705014749262
+        },
+        {
+          "name": "DEINE FREUNDE",
+          "count": 3,
+          "percentage": 0.12642225031605564
+        },
+        {
+          "name": "GUT & KLIMA",
+          "count": 3,
+          "percentage": 0.12642225031605564
+        },
+        {
+          "name": "SB",
+          "count": 2,
+          "percentage": 0.08428150021070376
+        }
+      ],
+      "motionCount": 1637,
+      "mentionCount": 2373
+    },
+    "2022": {
+      "stats": [
+        {
+          "name": "SPD",
+          "count": 377,
+          "percentage": 17.37327188940092
+        },
+        {
+          "name": "Grüne",
+          "count": 353,
+          "percentage": 16.267281105990783
+        },
+        {
+          "name": "Unbekannt",
+          "count": 321,
+          "percentage": 14.7926267281106
+        },
+        {
+          "name": "CDU",
+          "count": 228,
+          "percentage": 10.506912442396313
+        },
+        {
+          "name": "FRAKTION",
+          "count": 201,
+          "percentage": 9.262672811059907
+        },
+        {
+          "name": "FDP",
+          "count": 141,
+          "percentage": 6.497695852534561
+        },
+        {
+          "name": "FDP/KSG",
+          "count": 141,
+          "percentage": 6.497695852534561
+        },
+        {
+          "name": "Linke",
+          "count": 130,
+          "percentage": 5.990783410138248
+        },
+        {
+          "name": "PARTEI",
+          "count": 92,
+          "percentage": 4.239631336405529
+        },
+        {
+          "name": "DPart",
+          "count": 91,
+          "percentage": 4.193548387096775
+        },
+        {
+          "name": "AfD",
+          "count": 42,
+          "percentage": 1.935483870967742
+        },
+        {
+          "name": "KF",
+          "count": 24,
+          "percentage": 1.1059907834101383
+        },
+        {
+          "name": "Volt",
+          "count": 18,
+          "percentage": 0.8294930875576038
+        },
+        {
+          "name": "GUT & KLIMA",
+          "count": 5,
+          "percentage": 0.2304147465437788
+        },
+        {
+          "name": "Freie Wähler Köln",
+          "count": 3,
+          "percentage": 0.1382488479262673
+        },
+        {
+          "name": "DEINE FREUNDE",
+          "count": 2,
+          "percentage": 0.09216589861751152
+        },
+        {
+          "name": "Piraten",
+          "count": 1,
+          "percentage": 0.04608294930875576
+        }
+      ],
+      "motionCount": 1527,
+      "mentionCount": 2170
+    },
+    "2023": {
+      "stats": [
+        {
+          "name": "Unbekannt",
+          "count": 292,
+          "percentage": 17.991373998767717
+        },
+        {
+          "name": "SPD",
+          "count": 262,
+          "percentage": 16.14294516327788
+        },
+        {
+          "name": "Grüne",
+          "count": 225,
+          "percentage": 13.863216266173753
+        },
+        {
+          "name": "CDU",
+          "count": 185,
+          "percentage": 11.398644485520641
+        },
+        {
+          "name": "FRAKTION",
+          "count": 150,
+          "percentage": 9.242144177449168
+        },
+        {
+          "name": "FDP",
+          "count": 105,
+          "percentage": 6.469500924214418
+        },
+        {
+          "name": "FDP/KSG",
+          "count": 105,
+          "percentage": 6.469500924214418
+        },
+        {
+          "name": "Linke",
+          "count": 102,
+          "percentage": 6.284658040665435
+        },
+        {
+          "name": "PARTEI",
+          "count": 52,
+          "percentage": 3.203943314849045
+        },
+        {
+          "name": "DPart",
+          "count": 50,
+          "percentage": 3.080714725816389
+        },
+        {
+          "name": "AfD",
+          "count": 38,
+          "percentage": 2.3413431916204557
+        },
+        {
+          "name": "Volt",
+          "count": 31,
+          "percentage": 1.9100431300061615
+        },
+        {
+          "name": "KF",
+          "count": 14,
+          "percentage": 0.8626001232285889
+        },
+        {
+          "name": "GUT & KLIMA",
+          "count": 10,
+          "percentage": 0.6161429451632778
+        },
+        {
+          "name": "DEINE FREUNDE",
+          "count": 1,
+          "percentage": 0.06161429451632779
+        },
+        {
+          "name": "KLIMA FREUNDE & GUT",
+          "count": 1,
+          "percentage": 0.06161429451632779
+        }
+      ],
+      "motionCount": 1186,
+      "mentionCount": 1623
+    },
+    "2024": {
+      "stats": [
+        {
+          "name": "SPD",
+          "count": 296,
+          "percentage": 18.48844472204872
+        },
+        {
+          "name": "Unbekannt",
+          "count": 293,
+          "percentage": 18.301061836352282
+        },
+        {
+          "name": "Grüne",
+          "count": 202,
+          "percentage": 12.617114303560276
+        },
+        {
+          "name": "CDU",
+          "count": 182,
+          "percentage": 11.36789506558401
+        },
+        {
+          "name": "FRAKTION",
+          "count": 145,
+          "percentage": 9.05683947532792
+        },
+        {
+          "name": "Linke",
+          "count": 114,
+          "percentage": 7.12054965646471
+        },
+        {
+          "name": "FDP",
+          "count": 103,
+          "percentage": 6.433479075577764
+        },
+        {
+          "name": "FDP/KSG",
+          "count": 103,
+          "percentage": 6.433479075577764
+        },
+        {
+          "name": "DPart",
+          "count": 49,
+          "percentage": 3.0605871330418486
+        },
+        {
+          "name": "PARTEI",
+          "count": 49,
+          "percentage": 3.0605871330418486
+        },
+        {
+          "name": "Volt",
+          "count": 28,
+          "percentage": 1.7489069331667706
+        },
+        {
+          "name": "AfD",
+          "count": 20,
+          "percentage": 1.2492192379762648
+        },
+        {
+          "name": "KF",
+          "count": 9,
+          "percentage": 0.5621486570893192
+        },
+        {
+          "name": "GUT & KLIMA",
+          "count": 4,
+          "percentage": 0.24984384759525297
+        },
+        {
+          "name": "KLIMA FREUNDE & GUT",
+          "count": 4,
+          "percentage": 0.24984384759525297
+        }
+      ],
+      "motionCount": 1108,
+      "mentionCount": 1601
+    },
+    "2025": {
+      "stats": [
+        {
+          "name": "SPD",
+          "count": 248,
+          "percentage": 18.859315589353614
+        },
+        {
+          "name": "Unbekannt",
+          "count": 227,
+          "percentage": 17.26235741444867
+        },
+        {
+          "name": "Grüne",
+          "count": 205,
+          "percentage": 15.5893536121673
+        },
+        {
+          "name": "CDU",
+          "count": 152,
+          "percentage": 11.55893536121673
+        },
+        {
+          "name": "FRAKTION",
+          "count": 133,
+          "percentage": 10.114068441064639
+        },
+        {
+          "name": "Linke",
+          "count": 91,
+          "percentage": 6.920152091254753
+        },
+        {
+          "name": "FDP",
+          "count": 58,
+          "percentage": 4.410646387832699
+        },
+        {
+          "name": "FDP/KSG",
+          "count": 58,
+          "percentage": 4.410646387832699
+        },
+        {
+          "name": "AfD",
+          "count": 25,
+          "percentage": 1.9011406844106464
+        },
+        {
+          "name": "Volt",
+          "count": 25,
+          "percentage": 1.9011406844106464
+        },
+        {
+          "name": "DPart",
+          "count": 24,
+          "percentage": 1.8250950570342206
+        },
+        {
+          "name": "PARTEI",
+          "count": 24,
+          "percentage": 1.8250950570342206
+        },
+        {
+          "name": "KF",
+          "count": 23,
+          "percentage": 1.7490494296577948
+        },
+        {
+          "name": "KLIMA FREUNDE & GUT",
+          "count": 20,
+          "percentage": 1.520912547528517
+        },
+        {
+          "name": "GUT & KLIMA",
+          "count": 1,
+          "percentage": 0.07604562737642585
+        },
+        {
+          "name": "SB",
+          "count": 1,
+          "percentage": 0.07604562737642585
+        }
+      ],
+      "motionCount": 932,
+      "mentionCount": 1315
+    },
+    "2026": {
+      "stats": [
+        {
+          "name": "Unbekannt",
+          "count": 114,
+          "percentage": 31.75487465181058
+        },
+        {
+          "name": "SPD",
+          "count": 50,
+          "percentage": 13.92757660167131
+        },
+        {
+          "name": "FRAKTION",
+          "count": 48,
+          "percentage": 13.370473537604457
+        },
+        {
+          "name": "CDU",
+          "count": 37,
+          "percentage": 10.30640668523677
+        },
+        {
+          "name": "Grüne",
+          "count": 24,
+          "percentage": 6.685236768802229
+        },
+        {
+          "name": "Linke",
+          "count": 24,
+          "percentage": 6.685236768802229
+        },
+        {
+          "name": "Volt",
+          "count": 22,
+          "percentage": 6.128133704735376
+        },
+        {
+          "name": "FDP",
+          "count": 12,
+          "percentage": 3.3426183844011144
+        },
+        {
+          "name": "FDP/KSG",
+          "count": 12,
+          "percentage": 3.3426183844011144
+        },
+        {
+          "name": "AfD",
+          "count": 11,
+          "percentage": 3.064066852367688
+        },
+        {
+          "name": "DPart",
+          "count": 2,
+          "percentage": 0.5571030640668524
+        },
+        {
+          "name": "PARTEI",
+          "count": 2,
+          "percentage": 0.5571030640668524
+        },
+        {
+          "name": "BSW",
+          "count": 1,
+          "percentage": 0.2785515320334262
+        }
+      ],
+      "motionCount": 258,
+      "mentionCount": 359
+    }
+  }
+}

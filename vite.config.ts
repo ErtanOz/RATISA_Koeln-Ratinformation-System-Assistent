@@ -14,10 +14,9 @@ const parseBooleanEnv = (value: string | undefined, fallback: boolean) => {
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     const aiEnabled = parseBooleanEnv(env.VITE_ENABLE_AI, mode !== 'production');
-    const geminiApiKey = aiEnabled ? env.GEMINI_API_KEY || '' : '';
-    const openRouterApiKey = aiEnabled ? env.OPENROUTER_API_KEY || '' : '';
     const oparlProxyPrefix = env.VITE_OPARL_PROXY_PREFIX || '/oparl';
     const oparlBodyId = env.VITE_OPARL_BODY_ID || 'stadtverwaltung_koeln';
+    const aiHttpEndpoint = env.VITE_AI_HTTP_ENDPOINT || '/ai';
 
     return {
       publicDir: 'public',
@@ -39,17 +38,17 @@ export default defineConfig(({ mode }) => {
             target: 'http://127.0.0.1:3333',
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/mcp-http/, '/mcp'),
+          },
+          '/ai': {
+            target: 'http://127.0.0.1:3333',
+            changeOrigin: true,
           }
         }
       },
       plugins: [react()],
       define: {
-        'process.env.API_KEY': JSON.stringify(geminiApiKey),
-        'process.env.GEMINI_API_KEY': JSON.stringify(geminiApiKey),
-        'process.env.OPENROUTER_API_KEY': JSON.stringify(openRouterApiKey),
-        'process.env.GEMINI_MODEL': JSON.stringify(env.GEMINI_MODEL),
-        'process.env.GEMINI_FALLBACK_MODELS': JSON.stringify(env.GEMINI_FALLBACK_MODELS),
         'process.env.VITE_ENABLE_AI': JSON.stringify(aiEnabled ? 'true' : 'false'),
+        'process.env.VITE_AI_HTTP_ENDPOINT': JSON.stringify(aiHttpEndpoint),
         'process.env.VITE_OPARL_PROXY_PREFIX': JSON.stringify(oparlProxyPrefix),
         'process.env.VITE_OPARL_BODY_ID': JSON.stringify(oparlBodyId),
         'process.env.VITE_MCP_HTTP_ENDPOINT': JSON.stringify(env.VITE_MCP_HTTP_ENDPOINT || '/mcp-http'),

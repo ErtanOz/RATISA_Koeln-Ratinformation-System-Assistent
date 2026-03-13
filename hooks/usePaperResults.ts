@@ -3,6 +3,7 @@ import { AgendaItem, Consultation, Paper } from '../types';
 import { getItem } from '../services/oparlApiService';
 
 type ResultMap = Record<string, string>;
+type PaperResultSource = Pick<Paper, 'id' | 'consultation'>;
 
 const isConsultationObject = (c: string | Consultation): c is Consultation =>
   typeof c === 'object' && c !== null && typeof (c as Consultation).id === 'string';
@@ -10,7 +11,7 @@ const isConsultationObject = (c: string | Consultation): c is Consultation =>
 const isAgendaItemObject = (a: string | AgendaItem): a is AgendaItem =>
   typeof a === 'object' && a !== null && typeof (a as AgendaItem).id === 'string';
 
-export function usePaperResults(papers: Paper[]): ResultMap {
+export function usePaperResults(papers: PaperResultSource[]): ResultMap {
   const [results, setResults] = useState<ResultMap>({});
   const resultsRef = useRef<ResultMap>({});
   const abortRef = useRef<AbortController | null>(null);

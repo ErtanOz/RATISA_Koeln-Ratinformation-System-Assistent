@@ -16,20 +16,14 @@ View your app in AI Studio: https://ai.studio/apps/drive/1wPCT5Ku6Jx1fouL5OvbVuH
 1. Install dependencies:
    `npm install`
 2. Configure [.env.local](.env.local):
-   - `GEMINI_API_KEY=...`
-   - `GEMINI_MODEL=gemini-2.5-flash` (optional override)
-   - `GEMINI_FALLBACK_MODELS=gemini-flash-latest` (optional comma-separated fallback list)
-   - `OPENROUTER_API_KEY=...` (optional fallback provider)
    - `VITE_ENABLE_AI=true` (optional, defaults to `true` in dev and `false` in production)
+   - `VITE_AI_HTTP_ENDPOINT=/ai` (optional, defaults to `/ai`)
    - `VITE_OPARL_PROXY_PREFIX=/oparl` (optional, defaults to `/oparl`)
    - `VITE_OPARL_BODY_ID=stadtverwaltung_koeln` (optional, defaults to `stadtverwaltung_koeln`)
    - `VITE_MCP_HTTP_ENDPOINT=/mcp-http` (optional, defaults to `/mcp-http`)
-   - `MCP_API_KEY=...` (optional, only needed for HTTP MCP server protection)
-   - `MCP_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000`
-   - `MCP_PORT=3333`
-   - `MCP_BIND_HOST=127.0.0.1`
    - Important: keep each key only once in the file. Duplicate env keys override earlier values.
-3. Run the app:
+3. If you want AI search or AI summaries locally, start the separate HTTP backend in `mcp-server-netlify` and set the provider keys there.
+4. Run the app:
    `npm run dev`
 
 ## VPS Deployment (Nginx)
@@ -49,30 +43,34 @@ View your app in AI Studio: https://ai.studio/apps/drive/1wPCT5Ku6Jx1fouL5OvbVuH
 
 - `location /oparl/` must reverse proxy to:
   `https://buergerinfo.stadt-koeln.de/oparl/`
+- `location /ai/` should reverse proxy to your HTTP backend service (for example `http://127.0.0.1:3333/ai/`)
 - `location /` must keep SPA fallback:
   `try_files $uri /index.html`
-- `/oparl/` block must come before `/` block.
+- `/oparl/` and `/ai/` blocks must come before `/` block.
 
 ### Smoke checks after deploy
 
 ```bash
 curl -I https://<your-domain>/
 curl -I "https://<your-domain>/oparl/bodies/stadtverwaltung_koeln/papers?limit=1"
+curl -I "https://<your-domain>/ai/healthz"
 ```
 
 Expected:
 - `/` returns `200`
 - `/oparl/...` returns `200` with `content-type: application/json`
+- `/ai/healthz` returns `200`
 
 ### Troubleshooting checklist
 
 - If browser shows `Unexpected token '<'`, your `/oparl/*` route is returning HTML instead of JSON.
 - If `/oparl/...` returns `404`, your reverse proxy block is missing or placed after SPA fallback.
+- If AI requests fail with `404`, your `/ai/*` reverse proxy is missing or not routed to the HTTP backend.
 - If AI features should remain off in production, keep `VITE_ENABLE_AI=false` (or unset it; production default is disabled).
 
 ## MCP Development
 
-### HTTP MCP server (for `/mcp` playground)
+### HTTP backend (for `/mcp` and `/ai`)
 
 Run the local HTTP MCP server:
 
@@ -80,19 +78,22 @@ Run the local HTTP MCP server:
 npm run mcp:http:dev
 ```
 
-Default endpoint:
+Default endpoints:
 
-`http://127.0.0.1:3333/mcp`
+- `http://127.0.0.1:3333/mcp`
+- `http://127.0.0.1:3333/ai/ask`
+- `http://127.0.0.1:3333/ai/parse-search`
 
-The frontend dev server proxies `/mcp-http` to that endpoint.
+The frontend dev server proxies `/mcp-http` and `/ai/*` to that backend.
 
 ### Smoke tests
 
-Run MCP smoke tests:
+Run smoke tests:
 
 ```bash
 npm run mcp:smoke:stdio
 npm run mcp:smoke:http
+npm run ai:smoke:http
 ```
 
 ### `/mcp` Playground

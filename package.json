@@ -6,17 +6,23 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "archive:index:build": "node scripts/buildArchiveMeetingsIndex.mjs",
+    "party:summary:build": "tsx scripts/buildPartyActivitySummary.mts",
+    "spatial:data:sync": "node scripts/syncKoelnSpatialData.mjs",
+    "atlas:index:build": "node scripts/buildAtlasSpatialIndex.mjs",
+    "papers:index:build": "node scripts/buildPaperSearchIndex.mjs",
+    "archive:index:build": "node scripts/buildArchiveMeetingsIndex.mjs && node scripts/buildPaperSearchIndex.mjs && node scripts/buildAtlasSpatialIndex.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "mcp:http:dev": "npm --prefix mcp-server-netlify run dev:http",
+    "ai:smoke:http": "npm --prefix mcp-server-netlify run build && node tests/ai/smoke-http.mjs",
     "mcp:smoke:stdio": "npm --prefix mcp-server run build && node tests/mcp/smoke-stdio.mjs",
     "mcp:smoke:http": "npm --prefix mcp-server-netlify run build && node tests/mcp/smoke-http.mjs"
   },
   "dependencies": {
+    "@fontsource/public-sans": "^5.2.7",
     "@google/genai": "^1.30.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@openrouter/sdk": "^0.4.0",
@@ -24,6 +30,13 @@
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1",
     "zod": "^4.1.13"
+  },
+  "overrides": {
+    "@hono/node-server": "1.19.11",
+    "ajv": "8.18.0",
+    "express-rate-limit": "8.3.1",
+    "hono": "4.12.7",
+    "minimatch": "9.0.9"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",

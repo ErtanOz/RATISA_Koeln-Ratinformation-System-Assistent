@@ -150,3 +150,103 @@ export interface Location extends OparlObject {
     locality?: string;
     geojson?: object;
 }
+
+export type DistrictId =
+  | 'innenstadt'
+  | 'rodenkirchen'
+  | 'lindenthal'
+  | 'ehrenfeld'
+  | 'nippes'
+  | 'chorweiler'
+  | 'porz'
+  | 'kalk'
+  | 'mulheim';
+
+export type AtlasSource = 'live' | 'archive';
+export type AtlasConfidence = 'high' | 'medium' | 'low';
+export type AtlasConfidenceFilter = 'all' | 'medium' | 'high';
+export type AtlasMode = 'all' | 'live' | 'archive';
+export type AtlasSourceField = 'name' | 'location' | 'agenda' | 'searchText';
+
+export interface AtlasSpatialMatch {
+  districtId: DistrictId;
+  matchedTerms: string[];
+  sourceFields: AtlasSourceField[];
+  confidence: AtlasConfidence;
+}
+
+export interface AtlasMeetingRecord {
+  id: string;
+  name: string;
+  start?: string;
+  end?: string;
+  dateKey?: string;
+  location?: string;
+  source: AtlasSource;
+  searchText: string;
+  spatialMatches: AtlasSpatialMatch[];
+}
+
+export interface AtlasDistrictGeometry {
+  type: 'Polygon' | 'MultiPolygon';
+  coordinates: number[][][] | number[][][][];
+}
+
+export interface AtlasDistrictFeature {
+  type: 'Feature';
+  properties: {
+    districtId: DistrictId;
+    label: string;
+    districtNumber?: string;
+  };
+  geometry: AtlasDistrictGeometry;
+}
+
+export interface AtlasDistrictFeatureCollection {
+  type: 'FeatureCollection';
+  features: AtlasDistrictFeature[];
+}
+
+export type AtlasLexiconKind = 'district' | 'stadtteil' | 'stadtviertel' | 'landmark';
+
+export interface AtlasLexiconEntry {
+  term: string;
+  districtId: DistrictId;
+  kind: AtlasLexiconKind;
+  strong?: boolean;
+  aliases?: string[];
+}
+
+export interface AtlasLexiconDocument {
+  generatedAt: string;
+  source: string;
+  entries: AtlasLexiconEntry[];
+}
+
+export interface AtlasArchiveIndexMetadata {
+  generatedAt: string;
+  itemCount: number;
+  matchedItemCount: number;
+  source: string;
+  isPartial: boolean;
+  stopReason?: string;
+}
+
+export interface AtlasArchiveIndexDocument {
+  metadata: AtlasArchiveIndexMetadata;
+  items: AtlasMeetingRecord[];
+}
+
+export interface AtlasSummaryDocument {
+  generatedAt: string;
+  totalMatchedCount: number;
+  source: string;
+  topDistrictId?: DistrictId;
+  districts: Array<{
+    districtId: DistrictId;
+    label: string;
+    count: number;
+    lastMeetingDate?: string;
+    topTerms: string[];
+  }>;
+}

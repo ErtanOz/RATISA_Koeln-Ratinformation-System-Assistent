@@ -1,5 +1,6 @@
 const DEFAULT_OPARL_PROXY_PREFIX = "/oparl";
 const DEFAULT_OPARL_BODY_ID = "stadtverwaltung_koeln";
+const DEFAULT_AI_HTTP_ENDPOINT = "/ai";
 
 const truthyValues = new Set(["1", "true", "yes", "on"]);
 
@@ -24,14 +25,22 @@ function normalizeBodyId(value?: string): string {
   return trimmed || DEFAULT_OPARL_BODY_ID;
 }
 
+function normalizeHttpEndpoint(value?: string): string {
+  const raw = (value || DEFAULT_AI_HTTP_ENDPOINT).trim();
+  const withLeadingSlash = raw.startsWith("/") ? raw : `/${raw}`;
+  const collapsed = withLeadingSlash.replace(/\/{2,}/g, "/");
+  return collapsed.replace(/\/+$/, "") || DEFAULT_AI_HTTP_ENDPOINT;
+}
+
 const parsedEnableAi = normalizeBooleanString(process.env.VITE_ENABLE_AI);
 const oparlProxyPrefix = normalizeProxyPrefix(process.env.VITE_OPARL_PROXY_PREFIX);
 const oparlBodyId = normalizeBodyId(process.env.VITE_OPARL_BODY_ID);
+const aiHttpEndpoint = normalizeHttpEndpoint(process.env.VITE_AI_HTTP_ENDPOINT);
 
 export const runtimeConfig = {
   enableAi: parsedEnableAi ?? true,
+  aiHttpEndpoint,
   oparlProxyPrefix,
   oparlBodyId,
   oparlBaseUrl: `${oparlProxyPrefix}/bodies/${oparlBodyId}`,
 };
-

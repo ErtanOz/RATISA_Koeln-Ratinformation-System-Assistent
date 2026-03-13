@@ -10,9 +10,11 @@ npm.cmd install
 npm.cmd run dev:http
 ```
 
-Default dev endpoint:
+Default dev endpoints:
 
 - `http://127.0.0.1:3333/mcp`
+- `http://127.0.0.1:3333/ai/ask`
+- `http://127.0.0.1:3333/ai/parse-search`
 - health check: `http://127.0.0.1:3333/healthz`
 
 ## Environment variables
@@ -21,6 +23,11 @@ Default dev endpoint:
 - `MCP_BIND_HOST` (default `127.0.0.1`)
 - `MCP_ALLOWED_ORIGINS` (comma-separated, default `http://localhost:3000,http://127.0.0.1:3000`)
 - `MCP_API_KEY` (optional)
+- `GEMINI_API_KEY` or `API_KEY` (optional for `/ai/*`, primary provider)
+- `GEMINI_MODEL` (optional override, default `gemini-2.5-flash`)
+- `GEMINI_FALLBACK_MODELS` (optional comma-separated fallback chain)
+- `OPENROUTER_API_KEY` (optional `/ai/*` fallback provider)
+- `AI_MOCK_MODE` (optional local/smoke-test mode: `gemini-success`, `openrouter-fallback`, `parse-fallback`, `parse-success`, `echo`)
 
 ### Optional API key protection
 
@@ -53,7 +60,13 @@ Health endpoint (same function mount):
 
 `https://<your-site>.netlify.app/.netlify/functions/mcp/healthz`
 
+AI endpoints on the same function mount:
+
+- `https://<your-site>.netlify.app/.netlify/functions/mcp/ai/ask`
+- `https://<your-site>.netlify.app/.netlify/functions/mcp/ai/parse-search`
+
 ## Notes / limitations
 
 - Stateless JSON response mode is used (no long-lived SSE sessions).
 - All tools map to the Cologne OParl API and apply server-side filtering/pagination.
+- `/ai/*` centralizes Gemini/OpenRouter access so provider secrets never need to be shipped to the browser bundle.

@@ -1,5 +1,7 @@
 import { Meeting, Paper } from '../types';
+import { PartyActivityStatsResult } from '../utils/partyActivityStats';
 import { getList } from './oparlApiService';
+import { getPartyActivityStatsForYear } from './partyActivitySummaryService';
 
 export const DASHBOARD_UPCOMING_MEETING_LIMIT = 5;
 export const DASHBOARD_MEETING_PAGE_LIMIT = 200;
@@ -8,6 +10,7 @@ export const DASHBOARD_PAPER_PAGE_LIMIT = 100;
 export const DASHBOARD_PAPER_BATCH_SIZE = 3;
 export const DASHBOARD_PAPER_MAX_PAGES = 6;
 export const DASHBOARD_RECENT_PAPER_WINDOW_DAYS = 14;
+export const DASHBOARD_PARTY_ACTIVITY_TOP_N = 8;
 
 function toLocalDateKey(date: Date): string {
   const year = date.getFullYear();
@@ -122,4 +125,22 @@ export async function fetchRecentPaperCount(
     }
   });
   return count;
+}
+
+export async function fetchPartyActivityStatsForYear(
+  year: string,
+  signal?: AbortSignal,
+  topN = DASHBOARD_PARTY_ACTIVITY_TOP_N,
+): Promise<PartyActivityStatsResult> {
+  if (signal?.aborted) {
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
+  const result = await getPartyActivityStatsForYear(year, topN);
+
+  if (signal?.aborted) {
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
+  return result;
 }

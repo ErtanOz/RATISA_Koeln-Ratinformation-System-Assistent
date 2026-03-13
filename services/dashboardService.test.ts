@@ -1,13 +1,33 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fetchRecentPaperCount, fetchUpcomingDashboardMeetings } from './dashboardService';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  fetchPartyActivityStatsForYear,
+  fetchRecentPaperCount,
+  fetchUpcomingDashboardMeetings,
+} from './dashboardService';
 import * as apiService from './oparlApiService';
+import * as partySummaryService from './partyActivitySummaryService';
+
+const apiMocks = vi.hoisted(() => ({
+  getList: vi.fn(),
+}));
 
 vi.mock('./oparlApiService', async () => {
-  const actual = await vi.importActual<typeof import('./oparlApiService')>('./oparlApiService');
+  const actualApiService = await vi.importActual<typeof import('./oparlApiService')>('./oparlApiService');
+
+  return {
+    ...actualApiService,
+    getList: apiMocks.getList,
+  };
+});
+
+vi.mock('./partyActivitySummaryService', async () => {
+  const actual = await vi.importActual<typeof import('./partyActivitySummaryService')>(
+    './partyActivitySummaryService',
+  );
 
   return {
     ...actual,
-    getList: vi.fn(),
+    getPartyActivityStatsForYear: vi.fn(),
   };
 });
 
@@ -25,6 +45,11 @@ function mockPagedResponse<T>(data: T[], hasNext = false) {
 }
 
 describe('dashboardService', () => {
+  beforeEach(() => {
+    vi.mocked(apiService.getList).mockReset();
+    vi.mocked(partySummaryService.getPartyActivityStatsForYear).mockReset();
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
   });
@@ -120,5 +145,43 @@ describe('dashboardService', () => {
 
     expect(count).toBe(4);
     expect(getListMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('loads exact party activity stats from the summary service', async () => {
+    vi.mocked(partySummaryService.getPartyActivityStatsForYear).mockResolvedValue({
+      stats: [
+        { name: 'Alpha', count: 2, percentage: 66.6666666667 },
+        { name: 'Beta', count: 1, percentage: 33.3333333333 },
+      ],
+      motionCount: 2,
+      mentionCount: 3,
+    });
+
+    const result = await fetchPartyActivityStatsForYear('2026');
+
+    expect(apiService.getList).not.toHaveBeenCalled();
+    expect(partySummaryService.getPartyActivityStatsForYear).toHaveBeenCalledWith('2026', 8);
+    expect(result.motionCount).toBe(2);
+    expect(result.mentionCount).toBe(3);
+    const statsByName = new Map(result.stats.map((entry) => [entry.name, entry]));
+    expect(statsByName.get('Alpha')?.count).toBe(2);
+    expect(statsByName.get('Beta')?.count).toBe(1);
+    expect(statsByName.get('Alpha')?.percentage).toBeCloseTo(66.6666666667, 6);
+    expect(statsByName.get('Beta')?.percentage).toBeCloseTo(33.3333333333, 6);
+  });
+
+  it('propagates abort errors from summary-based party activity loading', async () => {
+    const abortError = new DOMException('Aborted', 'AbortError');
+    vi.mocked(partySummaryService.getPartyActivityStatsForYear).mockResolvedValue({
+      stats: [],
+      motionCount: 0,
+      mentionCount: 0,
+    });
+
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(fetchPartyActivityStatsForYear('2026', controller.signal)).rejects.toThrow('Aborted');
+    expect(apiService.getList).not.toHaveBeenCalled();
   });
 });

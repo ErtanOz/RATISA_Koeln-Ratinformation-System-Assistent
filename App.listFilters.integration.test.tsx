@@ -2,7 +2,8 @@ import type { ReactElement } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { MeetingArchive, MeetingsPage, PapersPage } from './App';
+import { MeetingsPage, PapersPage } from './App';
+import { MeetingArchive } from './routes/MeetingArchivePage';
 import * as apiService from './services/oparlApiService';
 import * as archiveService from './services/archiveDeepSearchService';
 
@@ -108,7 +109,7 @@ describe('List page filter regressions', () => {
     expect(apiService.getListAll).not.toHaveBeenCalled();
   });
 
-  it('filters archive meetings by old date range using the full archive index path', async () => {
+  it('hydrates deep search from archive date params and hides the browse list', async () => {
     vi.mocked(apiService.getListSnapshot).mockResolvedValue([
       { id: 'recent-1', name: 'Neuere Sitzung', start: '2026-03-05T10:00:00+01:00' },
     ] as any[]);
@@ -153,15 +154,19 @@ describe('List page filter regressions', () => {
       <MeetingArchive />,
     );
 
-    await waitFor(() => expect(screen.getByText(/1 Ergebnisse/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Archiv Januar 2024')).toBeInTheDocument());
 
     expect(screen.getAllByText('Archiv Januar 2024').length).toBeGreaterThan(0);
     expect(screen.queryByText('Archiv Februar 2024')).not.toBeInTheDocument();
+    expect(screen.queryByText('Neuere Sitzung')).not.toBeInTheDocument();
     expect(apiService.getListSnapshot).not.toHaveBeenCalled();
-    expect(archiveService.loadArchiveMeetingIndex).toHaveBeenCalledWith(expect.any(AbortSignal));
+    expect(archiveService.loadArchiveMeetingIndex).toHaveBeenCalled();
   });
 
-  it('routes archive text search through the archive index searchText field', async () => {
+  it('routes archive text search through deep search and keeps the browse list hidden', async () => {
+    vi.mocked(apiService.getListSnapshot).mockResolvedValue([
+      { id: 'snapshot-1', name: 'Vergangene Sitzung', start: '2026-03-05T10:00:00+01:00' },
+    ] as any[]);
     vi.mocked(archiveService.loadArchiveMeetingIndex).mockResolvedValue({
       metadata: {
         generatedAt: '2026-03-11T00:00:00.000Z',
@@ -191,10 +196,12 @@ describe('List page filter regressions', () => {
 
     renderRoute('/archive?q=rathaus', '/archive', <MeetingArchive />);
 
-    await waitFor(() => expect(screen.getByText(/1 Ergebnisse/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Aelteste Sitzung')).toBeInTheDocument());
 
     expect(screen.getAllByText('Aelteste Sitzung').length).toBeGreaterThan(0);
     expect(screen.queryByText('Andere Sitzung')).not.toBeInTheDocument();
+    expect(screen.queryByText('Vergangene Sitzung')).not.toBeInTheDocument();
+    expect(screen.getByRole('searchbox', { name: 'Archiv durchsuchen' })).toHaveValue('rathaus');
     expect(apiService.getListSnapshot).not.toHaveBeenCalled();
     expect(archiveService.loadArchiveMeetingIndex).toHaveBeenCalled();
   });
