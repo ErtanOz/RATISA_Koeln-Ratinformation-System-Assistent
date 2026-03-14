@@ -56,7 +56,7 @@ function createEvent(
 
 async function loadHandler() {
   vi.resetModules();
-  const module = await import("./mcp");
+  const module = await import("../mcp-server-netlify/netlify/functions/mcp");
   return module.handler as (
     event: ReturnType<typeof createEvent>,
     context: unknown,
