@@ -10,6 +10,13 @@ const createJsonResponse = (status: number, body: unknown) =>
     text: async () => JSON.stringify(body),
   }) as Response;
 
+const createTextResponse = (status: number, body: string) =>
+  ({
+    ok: status >= 200 && status < 300,
+    status,
+    text: async () => body,
+  }) as Response;
+
 describe("aiService", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -54,6 +61,21 @@ describe("aiService", () => {
     const result = await askGemini("ping");
 
     expect(result).toContain("Kein serverseitiger AI-Provider konfiguriert.");
+  });
+
+  it("maps HTML 404 responses to a deployment-focused error message", async () => {
+    vi.mocked(global.fetch).mockResolvedValue(
+      createTextResponse(
+        404,
+        "<!DOCTYPE html><html><head><title>Page not found</title></head><body>Missing</body></html>",
+      ),
+    );
+
+    const { askGemini } = await import("./aiService");
+    const result = await askGemini("ping");
+
+    expect(result).toContain("nicht erreichbar (404)");
+    expect(result).not.toContain("<!DOCTYPE html>");
   });
 
   it("uses structured parse results from the AI endpoint", async () => {

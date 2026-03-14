@@ -22,6 +22,12 @@ const DISABLED_MESSAGE =
 const SERVICE_UNAVAILABLE_MESSAGE =
   "Der AI-Dienst ist derzeit nicht erreichbar. Bitte versuchen Sie es später erneut.";
 
+const NOT_FOUND_MESSAGE =
+  "Der AI-Dienst ist unter diesem Pfad nicht erreichbar (404). Prüfen Sie `VITE_AI_HTTP_ENDPOINT` oder die Weiterleitung für `/ai/*`.";
+
+const looksLikeHtmlDocument = (value: string): boolean =>
+  /<(!doctype|html)\b/i.test(value);
+
 const parseMaybeJson = (text: string): unknown => {
   if (!text.trim()) return null;
   try {
@@ -38,7 +44,13 @@ const toErrorMessage = (status: number, data: unknown): string => {
     if (typeof maybeMessage === "string" && maybeMessage.trim()) return maybeMessage;
     if (typeof maybeFallback === "string" && maybeFallback.trim()) return maybeFallback;
   }
-  if (typeof data === "string" && data.trim()) return data;
+  if (typeof data === "string" && data.trim()) {
+    if (looksLikeHtmlDocument(data)) {
+      return status === 404 ? NOT_FOUND_MESSAGE : SERVICE_UNAVAILABLE_MESSAGE;
+    }
+    return data;
+  }
+  if (status === 404) return NOT_FOUND_MESSAGE;
   if (status >= 500) return SERVICE_UNAVAILABLE_MESSAGE;
   return `AI request failed with status ${status}.`;
 };

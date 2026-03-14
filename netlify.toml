@@ -1,6 +1,10 @@
 [build]
-  command = "npm run build"
+  command = "npm ci --prefix mcp-server-netlify && npm run build"
+  functions = "mcp-server-netlify/netlify/functions"
   publish = "dist"
+
+[functions]
+  node_bundler = "esbuild"
 
 [[headers]]
   for = "/assets/*"
@@ -18,6 +22,24 @@
 [[redirects]]
   from = "/oparl/*"
   to = "https://buergerinfo.stadt-koeln.de/oparl/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/mcp-http"
+  to = "/.netlify/functions/mcp"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/mcp-http/*"
+  to = "/.netlify/functions/mcp/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ai/*"
+  to = "/.netlify/functions/mcp/ai/:splat"
   status = 200
   force = true
 

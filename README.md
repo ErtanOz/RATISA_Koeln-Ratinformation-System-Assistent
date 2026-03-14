@@ -68,6 +68,21 @@ Expected:
 - If AI requests fail with `404`, your `/ai/*` reverse proxy is missing or not routed to the HTTP backend.
 - If AI features should remain off in production, keep `VITE_ENABLE_AI=false` (or unset it; production default is disabled).
 
+## Netlify Deployment
+
+Deploy the repository root with the included [`netlify.toml`](netlify.toml).
+
+- The frontend is published from `dist/`.
+- Netlify also mounts the MCP/AI function from `mcp-server-netlify/netlify/functions`.
+- Requests to `/ai/*` are rewritten to `/.netlify/functions/mcp/ai/*`.
+- Requests to `/mcp-http` are rewritten to `/.netlify/functions/mcp`.
+
+Set these environment variables in Netlify when AI features should work in production:
+
+- `VITE_ENABLE_AI=true`
+- `GEMINI_API_KEY=<your-key>` or `OPENROUTER_API_KEY=<your-key>`
+- Optional provider overrides such as `GEMINI_MODEL`
+
 ## MCP Development
 
 ### HTTP backend (for `/mcp` and `/ai`)
