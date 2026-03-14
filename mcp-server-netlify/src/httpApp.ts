@@ -10,6 +10,7 @@ import {
   validateAskRequest,
   validateParseSearchRequest,
 } from "./httpAiGuards.js";
+import { normalizeJsonRequestBody } from "./httpJsonBody.js";
 import {
   applyCorsAndMaybeHandlePreflight,
   applySecurityHeaders,
@@ -61,8 +62,8 @@ export function createHttpApp() {
     next();
   });
 
-  app.use("/ai", express.json({ limit: getAiJsonBodyLimit() }));
-  app.use("/mcp", express.json());
+  app.use("/ai", express.json({ limit: getAiJsonBodyLimit() }), normalizeJsonRequestBody);
+  app.use("/mcp", express.json(), normalizeJsonRequestBody);
 
   app.get("/healthz", (_req, res) => {
     res.status(200).json({ status: "ok", service: "oparl-koeln-mcp-http" });
