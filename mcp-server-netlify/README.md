@@ -21,7 +21,7 @@ Default dev endpoints:
 
 - `MCP_PORT` (default `3333`)
 - `MCP_BIND_HOST` (default `127.0.0.1`)
-- `MCP_ALLOWED_ORIGINS` (comma-separated, default `http://localhost:3000,http://127.0.0.1:3000`)
+- `MCP_ALLOWED_ORIGINS` (comma-separated, default `http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173`)
 - `MCP_API_KEY` (optional)
 - `GEMINI_API_KEY` or `API_KEY` (optional for `/ai/*`, primary provider)
 - `GEMINI_MODEL` (optional override, default `gemini-2.5-flash`)
@@ -43,7 +43,9 @@ If not set, the endpoint remains open (backwards compatible behavior).
 CORS and preflight handling are built in for browser-based playground usage.
 
 - Allowed origins come from `MCP_ALLOWED_ORIGINS`.
+- Local browser usage officially supports frontend dev servers on `3000` and `5173`.
 - `OPTIONS` preflight requests return `204` when origin is allowed.
+- If you change the frontend port, add the exact browser origin to `MCP_ALLOWED_ORIGINS`.
 
 ## Deploy to Netlify
 

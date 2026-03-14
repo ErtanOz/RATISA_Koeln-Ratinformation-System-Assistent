@@ -21,6 +21,7 @@ View your app in AI Studio: https://ai.studio/apps/drive/1wPCT5Ku6Jx1fouL5OvbVuH
    - `VITE_OPARL_PROXY_PREFIX=/oparl` (optional, defaults to `/oparl`)
    - `VITE_OPARL_BODY_ID=stadtverwaltung_koeln` (optional, defaults to `stadtverwaltung_koeln`)
    - `VITE_MCP_HTTP_ENDPOINT=/mcp-http` (optional, defaults to `/mcp-http`)
+   - `MCP_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173` for local browser access to `/ai` and `/mcp-http`
    - Important: keep each key only once in the file. Duplicate env keys override earlier values.
 3. If you want AI search or AI summaries locally, start the separate HTTP backend in `mcp-server-netlify` and set the provider keys there.
 4. Run the app:
@@ -103,6 +104,7 @@ Default endpoints:
 - `http://127.0.0.1:3333/ai/parse-search`
 
 The frontend dev server proxies `/mcp-http` and `/ai/*` to that backend.
+If you run the frontend on a different local origin, update `MCP_ALLOWED_ORIGINS` to include that exact `scheme://host:port`.
 
 ### Smoke tests
 

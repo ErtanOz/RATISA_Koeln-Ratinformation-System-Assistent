@@ -8,6 +8,13 @@ function assert(condition, message) {
   }
 }
 
+const LOCAL_ALLOWED_ORIGINS = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+].join(",");
+
 async function waitForServerReady(childProcess, timeoutMs = 20_000) {
   let ready = false;
   let stdout = "";
@@ -43,7 +50,7 @@ async function withAiServer(env, callback) {
       ...process.env,
       MCP_PORT: String(port),
       MCP_BIND_HOST: host,
-      MCP_ALLOWED_ORIGINS: "http://localhost:3000",
+      MCP_ALLOWED_ORIGINS: LOCAL_ALLOWED_ORIGINS,
       ...env,
     },
     stdio: ["ignore", "pipe", "pipe"],
@@ -60,12 +67,13 @@ async function withAiServer(env, callback) {
   }
 }
 
-async function postJson(url, body) {
+async function postJson(url, body, headers = {}) {
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
+      ...headers,
     },
     body: JSON.stringify(body),
   });
@@ -135,7 +143,11 @@ async function withAttachmentServer(callback) {
 
 async function run() {
   await withAiServer({ AI_MOCK_MODE: "gemini-success" }, async (baseUrl) => {
-    const response = await postJson(`${baseUrl}/ai/ask`, { prompt: "ping" });
+    const response = await postJson(
+      `${baseUrl}/ai/ask`,
+      { prompt: "ping" },
+      { Origin: "http://localhost:5173" },
+    );
     assert(response.status === 200, "Expected 200 for gemini-success mock mode.");
     assert(response.json.text === "Mock Gemini success.", "Expected mock Gemini response.");
   });
