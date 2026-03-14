@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolvePaperSearchIndexPath } from "./runtimePaths.js";
 
 export interface PaperSearchIndexItem {
   id: string;
@@ -34,10 +33,7 @@ export interface PaperSearchIndexQueryResult {
   totalMatches: number;
 }
 
-const currentDir = path.dirname(fileURLToPath(import.meta.url));
-const packageRoot = path.resolve(currentDir, "..");
-const repoRoot = path.resolve(packageRoot, "..");
-const INDEX_PATH = path.join(repoRoot, "public", "data", "paper-search.index.json");
+const INDEX_PATH = resolvePaperSearchIndexPath({ moduleUrl: import.meta.url });
 
 let cachedIndex: PaperSearchIndexDocument | null = null;
 let cachedIndexPromise: Promise<PaperSearchIndexDocument> | null = null;

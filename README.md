@@ -74,8 +74,11 @@ Deploy the repository root with the included [`netlify.toml`](netlify.toml).
 
 - The frontend is published from `dist/`.
 - Netlify also mounts the MCP/AI function from `mcp-server-netlify/netlify/functions`.
+- The published artifact must include `dist/_redirects`; the source of truth for those rules is `public/_redirects`.
 - Requests to `/ai/*` are rewritten to `/.netlify/functions/mcp/ai/*`.
 - Requests to `/mcp-http` are rewritten to `/.netlify/functions/mcp`.
+
+After each Netlify build, verify that `dist/_redirects` still contains the `/ai/*` and `/mcp-http*` rewrites ahead of the SPA fallback rule.
 
 Set these environment variables in Netlify when AI features should work in production:
 

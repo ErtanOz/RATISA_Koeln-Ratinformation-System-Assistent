@@ -1,2 +1,5 @@
+/mcp-http  /.netlify/functions/mcp  200
+/mcp-http/*  /.netlify/functions/mcp/:splat  200
+/ai/*  /.netlify/functions/mcp/ai/:splat  200
 /oparl/*  https://buergerinfo.stadt-koeln.de/oparl/:splat  200!
 /*        /index.html                                   200
