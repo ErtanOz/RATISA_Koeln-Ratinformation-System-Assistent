@@ -87,6 +87,11 @@ Set these environment variables in Netlify when AI features should work in produ
 - `GEMINI_API_KEY=<your-key>` or `OPENROUTER_API_KEY=<your-key>`
 - Optional provider overrides such as `GEMINI_MODEL`
 
+Notes:
+- Same-origin requests from your Netlify-hosted frontend to `/ai/*` and `/mcp-http*` should work without setting `MCP_ALLOWED_ORIGINS`.
+- Set `MCP_ALLOWED_ORIGINS` in Netlify only when additional browser origins outside the site domain must call the backend.
+- `MCP_BIND_HOST` is for local socket binding and should not be used to control Netlify access behavior.
+
 ## MCP Development
 
 ### HTTP backend (for `/mcp` and `/ai`)

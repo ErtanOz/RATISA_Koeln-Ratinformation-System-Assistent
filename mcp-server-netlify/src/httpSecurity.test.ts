@@ -19,13 +19,27 @@ interface MockResponse {
 }
 
 function createRequest(
-  method: string,
-  origin?: string,
+  options: {
+    method: string;
+    origin?: string;
+    host?: string;
+    forwardedProto?: string;
+    protocol?: string;
+    encrypted?: boolean;
+  },
 ): Request {
   return {
-    method,
-    headers: origin ? { origin } : {},
-  } as Request;
+    method: options.method,
+    headers: {
+      ...(options.origin ? { origin: options.origin } : {}),
+      ...(options.host ? { host: options.host } : {}),
+      ...(options.forwardedProto
+        ? { "x-forwarded-proto": options.forwardedProto }
+        : {}),
+    },
+    protocol: options.protocol,
+    socket: { encrypted: options.encrypted ?? false },
+  } as unknown as Request;
 }
 
 function createResponse(): MockResponse & Response {
@@ -73,7 +87,10 @@ describe("applyCorsAndMaybeHandlePreflight", () => {
     const response = createResponse();
 
     const handled = applyCorsAndMaybeHandlePreflight(
-      createRequest("POST", "http://localhost:3000"),
+      createRequest({
+        method: "POST",
+        origin: "http://localhost:3000",
+      }),
       response,
     );
 
@@ -86,7 +103,10 @@ describe("applyCorsAndMaybeHandlePreflight", () => {
     const response = createResponse();
 
     const handled = applyCorsAndMaybeHandlePreflight(
-      createRequest("POST", "http://localhost:5173"),
+      createRequest({
+        method: "POST",
+        origin: "http://localhost:5173",
+      }),
       response,
     );
 
@@ -94,12 +114,35 @@ describe("applyCorsAndMaybeHandlePreflight", () => {
     expect(response.getHeader("Access-Control-Allow-Origin")).toBe("http://localhost:5173");
   });
 
+  it("allows same-origin production requests without explicit allowlist", () => {
+    delete process.env.MCP_ALLOWED_ORIGINS;
+    const response = createResponse();
+
+    const handled = applyCorsAndMaybeHandlePreflight(
+      createRequest({
+        method: "POST",
+        origin: "https://shiny-cuchufli-56111d.netlify.app",
+        host: "shiny-cuchufli-56111d.netlify.app",
+        forwardedProto: "https",
+      }),
+      response,
+    );
+
+    expect(handled).toBe(false);
+    expect(response.getHeader("Access-Control-Allow-Origin")).toBe(
+      "https://shiny-cuchufli-56111d.netlify.app",
+    );
+  });
+
   it("rejects disallowed origins", () => {
     delete process.env.MCP_ALLOWED_ORIGINS;
     const response = createResponse();
 
     const handled = applyCorsAndMaybeHandlePreflight(
-      createRequest("POST", "http://evil.test"),
+      createRequest({
+        method: "POST",
+        origin: "http://evil.test",
+      }),
       response,
     );
 
@@ -115,12 +158,53 @@ describe("applyCorsAndMaybeHandlePreflight", () => {
     const response = createResponse();
 
     const handled = applyCorsAndMaybeHandlePreflight(
-      createRequest("OPTIONS", "http://localhost:5173"),
+      createRequest({
+        method: "OPTIONS",
+        origin: "http://localhost:5173",
+      }),
       response,
     );
 
     expect(handled).toBe(true);
     expect(response.statusCode).toBe(204);
     expect(response.getHeader("Access-Control-Allow-Origin")).toBe("http://localhost:5173");
+  });
+
+  it("rejects cross-origin production requests that are not explicitly allowed", () => {
+    delete process.env.MCP_ALLOWED_ORIGINS;
+    const response = createResponse();
+
+    const handled = applyCorsAndMaybeHandlePreflight(
+      createRequest({
+        method: "POST",
+        origin: "https://evil.test",
+        host: "shiny-cuchufli-56111d.netlify.app",
+        forwardedProto: "https",
+      }),
+      response,
+    );
+
+    expect(handled).toBe(true);
+    expect(response.statusCode).toBe(403);
+  });
+
+  it("allows explicitly configured extra origins in production", () => {
+    process.env.MCP_ALLOWED_ORIGINS = "https://app.example.com";
+    const response = createResponse();
+
+    const handled = applyCorsAndMaybeHandlePreflight(
+      createRequest({
+        method: "POST",
+        origin: "https://app.example.com",
+        host: "shiny-cuchufli-56111d.netlify.app",
+        forwardedProto: "https",
+      }),
+      response,
+    );
+
+    expect(handled).toBe(false);
+    expect(response.getHeader("Access-Control-Allow-Origin")).toBe(
+      "https://app.example.com",
+    );
   });
 });

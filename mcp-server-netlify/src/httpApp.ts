@@ -16,12 +16,30 @@ import {
   isApiKeyAuthorized,
 } from "./httpSecurity.js";
 
-function createSecureHttpApp(bindHost: string) {
+const LOOPBACK_BIND_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
+const WILDCARD_BIND_HOSTS = new Set(["0.0.0.0", "::"]);
+
+export function isServerlessRuntime(env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(
+    env.NETLIFY ||
+      env.AWS_LAMBDA_FUNCTION_NAME ||
+      env.LAMBDA_TASK_ROOT,
+  );
+}
+
+export function shouldUseLocalhostHostValidation(
+  bindHost: string,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return LOOPBACK_BIND_HOSTS.has(bindHost) && !isServerlessRuntime(env);
+}
+
+function createSecureHttpApp(bindHost: string, env: NodeJS.ProcessEnv = process.env) {
   const app = express();
 
-  if (bindHost === "127.0.0.1" || bindHost === "localhost" || bindHost === "::1") {
+  if (shouldUseLocalhostHostValidation(bindHost, env)) {
     app.use(localhostHostValidation());
-  } else if (bindHost === "0.0.0.0" || bindHost === "::") {
+  } else if (WILDCARD_BIND_HOSTS.has(bindHost) && !isServerlessRuntime(env)) {
     console.warn(
       `Warning: Server is binding to ${bindHost} without DNS rebinding protection. ` +
         "Consider using authentication or a trusted reverse proxy in front of the service.",

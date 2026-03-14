@@ -18,6 +18,13 @@ const SECURITY_HEADERS: Record<string, string> = {
   "X-Frame-Options": "DENY",
 };
 
+function getHeaderValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) {
+    return value[0]?.trim() || "";
+  }
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function parseAllowedOrigins(): string[] {
   const raw = process.env.MCP_ALLOWED_ORIGINS;
   if (!raw || !raw.trim()) {
@@ -43,19 +50,61 @@ function extractBearerToken(authorizationHeader?: string): string | null {
   return token.trim();
 }
 
+function getRequestProtocol(req: Request): string {
+  const forwardedProto = getHeaderValue(req.headers["x-forwarded-proto"]);
+  if (forwardedProto) {
+    return forwardedProto.split(",")[0].trim();
+  }
+
+  if (typeof req.protocol === "string" && req.protocol.trim()) {
+    return req.protocol.trim();
+  }
+
+  return (req.socket as { encrypted?: boolean } | undefined)?.encrypted ? "https" : "http";
+}
+
+function normalizeOrigin(value: string): string | null {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+function getRequestOrigin(req: Request): string | null {
+  const hostHeader = getHeaderValue(req.headers.host);
+  if (!hostHeader) return null;
+
+  try {
+    return new URL(`${getRequestProtocol(req)}://${hostHeader}`).origin;
+  } catch {
+    return null;
+  }
+}
+
+function isSameOriginRequest(req: Request, origin: string): boolean {
+  const normalizedOrigin = normalizeOrigin(origin);
+  const requestOrigin = getRequestOrigin(req);
+  return !!normalizedOrigin && !!requestOrigin && normalizedOrigin === requestOrigin;
+}
+
 export function applyCorsAndMaybeHandlePreflight(
   req: Request,
   res: Response
 ): boolean {
   const allowedOrigins = parseAllowedOrigins();
   const allowAnyOrigin = allowedOrigins.includes("*");
-  const origin = typeof req.headers.origin === "string" ? req.headers.origin : "";
+  const origin = getHeaderValue(req.headers.origin);
 
   res.setHeader("Access-Control-Allow-Methods", ALLOW_METHODS);
   res.setHeader("Access-Control-Allow-Headers", ALLOW_HEADERS);
   res.setHeader("Access-Control-Max-Age", "600");
 
-  const isAllowedOrigin = !origin || allowAnyOrigin || allowedOrigins.includes(origin);
+  const isAllowedOrigin =
+    !origin ||
+    isSameOriginRequest(req, origin) ||
+    allowAnyOrigin ||
+    allowedOrigins.includes(origin);
 
   if (origin && isAllowedOrigin) {
     res.setHeader("Access-Control-Allow-Origin", allowAnyOrigin ? "*" : origin);

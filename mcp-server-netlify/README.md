@@ -54,6 +54,11 @@ CORS and preflight handling are built in for browser-based playground usage.
 3. Build command: `npm run build`
 4. Functions directory: `netlify/functions`
 
+Notes for Netlify:
+- Same-origin requests from the deployed site to `/ai/*` and `/mcp` work without setting `MCP_ALLOWED_ORIGINS`.
+- Set `MCP_ALLOWED_ORIGINS` only for additional external browser origins.
+- `MCP_BIND_HOST` is a local bind setting and should not be used to configure Netlify access.
+
 After deploy, your MCP endpoint is:
 
 `https://<your-site>.netlify.app/.netlify/functions/mcp`
