@@ -80,6 +80,7 @@ Deploy the repository root with the included [`netlify.toml`](netlify.toml).
 - Requests to `/mcp-http` are rewritten to `/.netlify/functions/mcp`.
 
 After each Netlify build, verify that `dist/_redirects` still contains the `/ai/*` and `/mcp-http*` rewrites ahead of the SPA fallback rule.
+Before pushing, run `npm run guard:netlify:functions` to ensure only real deployable entries are present in `mcp-server-netlify/netlify/functions`.
 
 Set these environment variables in Netlify when AI features should work in production:
 

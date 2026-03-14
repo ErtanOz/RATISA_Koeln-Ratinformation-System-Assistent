@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            mcp-server-netlify/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install Netlify function dependencies
+        run: npm --prefix mcp-server-netlify ci
+
+      - name: Guard Netlify function directory
+        run: npm run guard:netlify:functions
+
+      - name: Verify Netlify backend build
+        run: npm --prefix mcp-server-netlify run build
+
+      - name: Run focused Netlify backend tests
+        run: npm run test -- tests/netlifyHandler.test.ts mcp-server-netlify/src/httpApp.test.ts mcp-server-netlify/src/httpSecurity.test.ts tests/netlifyRedirects.test.ts

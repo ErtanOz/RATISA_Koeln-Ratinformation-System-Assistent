@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
+    "guard:netlify:functions": "node scripts/checkNetlifyFunctions.mjs",
     "mcp:http:dev": "npm --prefix mcp-server-netlify run dev:http",
     "ai:smoke:http": "npm --prefix mcp-server-netlify run build && node tests/ai/smoke-http.mjs",
     "mcp:smoke:stdio": "npm --prefix mcp-server run build && node tests/mcp/smoke-stdio.mjs",
