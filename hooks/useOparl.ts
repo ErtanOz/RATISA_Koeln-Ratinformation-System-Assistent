@@ -32,7 +32,7 @@ export function useOparlList<T>(resource: string, params?: URLSearchParams) {
       const result = await getList<T>(resource, currentParams, controller.signal);
       if (!controller.signal.aborted) { setData(result); setIsLoading(false); }
     } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') return;
+      if (e instanceof DOMException && e.name === 'AbortError' && controller.signal.aborted) return;
       if (!controller.signal.aborted) { console.error(`Failed to fetch ${resource}:`, e); setError(e as Error); setIsLoading(false); }
     }
   }, [resource, paramsString]);
@@ -62,7 +62,7 @@ export function useOparlItem<T>(url: string | undefined | null) {
       const result = await getItem<T>(url, controller.signal);
       if (!controller.signal.aborted) { setData(result); setIsLoading(false); }
     } catch (e) {
-      if (e instanceof DOMException && e.name === 'AbortError') return;
+      if (e instanceof DOMException && e.name === 'AbortError' && controller.signal.aborted) return;
       if (!controller.signal.aborted) { console.error(`Failed to fetch item ${url}:`, e); setError(e as Error); setIsLoading(false); }
     }
   }, [url]);
@@ -151,7 +151,7 @@ export function useOparlFiltered<T extends { id: string }>(
                 setIsLoading(false);
             }
         } catch (e) {
-            if (e instanceof DOMException && e.name === 'AbortError') return;
+            if (e instanceof DOMException && e.name === 'AbortError' && controller.signal.aborted) return;
             if (!controller.signal.aborted) {
                 console.error(`Failed to fetch ${resource}:`, e);
                 setError(e as Error);

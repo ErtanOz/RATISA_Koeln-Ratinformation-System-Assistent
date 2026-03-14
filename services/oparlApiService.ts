@@ -15,6 +15,9 @@ const REVALIDATE_TTL = 2 * 60 * 1000; // 2 Minuten
 
 const MAX_CACHE_SIZE = 200; // Limit number of cached items
 const REQUEST_TIMEOUT_MS = 15_000;
+const MAX_REQUEST_ATTEMPTS = 3;
+const RETRYABLE_STATUSES = new Set([401, 408, 429, 500, 502, 503, 504]);
+const RETRY_DELAY_MS = 400;
 
 interface CacheEntry<T> {
   data: T;
@@ -138,6 +141,27 @@ function createRequestSignal(signal?: AbortSignal) {
     };
 }
 
+function waitBeforeRetry(ms: number, signal?: AbortSignal): Promise<void> {
+    return new Promise((resolve, reject) => {
+        if (signal?.aborted) {
+            reject(new DOMException('Aborted', 'AbortError'));
+            return;
+        }
+
+        const onAbort = () => {
+            clearTimeout(timeoutId);
+            reject(new DOMException('Aborted', 'AbortError'));
+        };
+
+        const timeoutId = setTimeout(() => {
+            signal?.removeEventListener('abort', onAbort);
+            resolve();
+        }, ms);
+
+        signal?.addEventListener('abort', onAbort, { once: true });
+    });
+}
+
 async function parseApiJson<T>(response: Response): Promise<T> {
   const contentType = response.headers.get('content-type')?.toLowerCase() || '';
   const bodyText = await response.text();
@@ -164,6 +188,7 @@ async function parseApiJson<T>(response: Response): Promise<T> {
 export async function fetchFromApi<T>(url: string, signal?: AbortSignal): Promise<T> {
   const now = Date.now();
   const cached = cache.get(url);
+  const canDeduplicate = !signal;
 
   // 1. Check Abort Signal immediately
   if (signal?.aborted) {
@@ -186,7 +211,7 @@ export async function fetchFromApi<T>(url: string, signal?: AbortSignal): Promis
   }
 
   // 3. Request Deduplication
-  let requestPromise = inflightRequests.get(url);
+  let requestPromise = canDeduplicate ? inflightRequests.get(url) : undefined;
   
   if (!requestPromise) {
       requestPromise = (async () => {
@@ -202,81 +227,106 @@ export async function fetchFromApi<T>(url: string, signal?: AbortSignal): Promis
                 if (cached.lastModified) headers['If-Modified-Since'] = cached.lastModified;
               }
 
-              const requestContext = createRequestSignal(signal);
-              const response = await (async () => {
-                  try {
-                      return await fetch(url, { headers, signal: requestContext.signal }).catch(err => {
-                          if (err.name === 'AbortError') {
-                              if (signal?.aborted) {
+              for (let attempt = 1; attempt <= MAX_REQUEST_ATTEMPTS; attempt++) {
+                  const requestContext = createRequestSignal(signal);
+                  const response = await (async () => {
+                      try {
+                          return await fetch(url, { headers, signal: requestContext.signal }).catch(err => {
+                              if (err.name === 'AbortError') {
+                                  if (signal?.aborted) {
+                                      throw err;
+                                  }
+                                  if (requestContext.didTimeout()) {
+                                      throw new ApiError(0, `Zeitüberschreitung nach ${REQUEST_TIMEOUT_MS / 1000} Sekunden.`);
+                                  }
                                   throw err;
                               }
-                              if (requestContext.didTimeout()) {
-                                  throw new ApiError(0, `Zeitüberschreitung nach ${REQUEST_TIMEOUT_MS / 1000} Sekunden.`);
-                              }
-                              throw err;
-                          }
-                          throw new ApiError(0, 'Netzwerkfehler: Bitte überprüfen Sie Ihre Internetverbindung.');
-                      });
-                  } finally {
-                      requestContext.cleanup();
-                  }
-              })();
-              
-              if (response.status === 304 && cached) {
-                  cached.fetchedAt = Date.now();
-                  cached.expiry = Date.now() + CACHE_TTL;
-                  cache.delete(url);
-                  cache.set(url, cached);
-                  return cached.data;
-              }
-
-              if (!response.ok) {
-                  // Map HTTP status codes to user friendly messages where possible
-                  let msg = response.statusText;
-                  if (response.status === 404) msg = 'Ressource nicht gefunden.';
-                  if (response.status === 500) msg = 'Interner Serverfehler.';
-                  if (response.status === 503) msg = 'Dienst nicht verfügbar.';
-                  
-                  throw new ApiError(response.status, msg);
-              }
-
-              const data = await parseApiJson<T>(response);
-              
-              const entry: CacheEntry<T> = {
-                  data,
-                  fetchedAt: Date.now(),
-                  expiry: Date.now() + CACHE_TTL,
-                  etag: response.headers.get('ETag') || undefined,
-                  lastModified: response.headers.get('Last-Modified') || undefined
-              };
-
-              pruneCache();
-              cache.set(url, entry);
-
-              if (isPagedResponse(data)) {
-                  data.data.forEach((item) => {
-                      if (isOparlObject(item)) {
-                          cache.set(item.id, {
-                              data: item,
-                              fetchedAt: Date.now(),
-                              expiry: Date.now() + CACHE_TTL
+                              throw new ApiError(0, 'Netzwerkfehler: Bitte überprüfen Sie Ihre Internetverbindung.');
                           });
+                      } finally {
+                          requestContext.cleanup();
                       }
-                  });
+                  })();
+                  
+                  if (response.status === 304 && cached) {
+                      cached.fetchedAt = Date.now();
+                      cached.expiry = Date.now() + CACHE_TTL;
+                      cache.delete(url);
+                      cache.set(url, cached);
+                      return cached.data;
+                  }
+
+                  if (!response.ok) {
+                      const shouldRetry =
+                          RETRYABLE_STATUSES.has(response.status) && attempt < MAX_REQUEST_ATTEMPTS;
+
+                      if (shouldRetry) {
+                          console.warn('Retrying transient API response', {
+                              url,
+                              status: response.status,
+                              attempt,
+                              maxAttempts: MAX_REQUEST_ATTEMPTS,
+                          });
+                          await waitBeforeRetry(RETRY_DELAY_MS * attempt, signal);
+                          continue;
+                      }
+
+                      // Map HTTP status codes to user friendly messages where possible
+                      let msg = response.statusText;
+                      if (response.status === 401) {
+                          msg = 'Nicht autorisiert oder temporär vom Datenanbieter abgewiesen.';
+                      }
+                      if (response.status === 404) msg = 'Ressource nicht gefunden.';
+                      if (response.status === 500) msg = 'Interner Serverfehler.';
+                      if (response.status === 503) msg = 'Dienst nicht verfügbar.';
+                      
+                      throw new ApiError(response.status, msg);
+                  }
+
+                  const data = await parseApiJson<T>(response);
+                  
+                  const entry: CacheEntry<T> = {
+                      data,
+                      fetchedAt: Date.now(),
+                      expiry: Date.now() + CACHE_TTL,
+                      etag: response.headers.get('ETag') || undefined,
+                      lastModified: response.headers.get('Last-Modified') || undefined
+                  };
+
+                  pruneCache();
+                  cache.set(url, entry);
+
+                  if (isPagedResponse(data)) {
+                      data.data.forEach((item) => {
+                          if (isOparlObject(item)) {
+                              cache.set(item.id, {
+                                  data: item,
+                                  fetchedAt: Date.now(),
+                                  expiry: Date.now() + CACHE_TTL
+                              });
+                          }
+                      });
+                  }
+
+                  return data;
               }
 
-              return data;
+              throw new ApiError(0, 'Unbekannter API-Fehler.');
           } catch (error) {
              throw error; 
           } finally {
               if (acquiredTurn) {
                   releaseTurn();
               }
-              inflightRequests.delete(url);
+              if (canDeduplicate) {
+                  inflightRequests.delete(url);
+              }
           }
       })();
       
-      inflightRequests.set(url, requestPromise);
+      if (canDeduplicate) {
+          inflightRequests.set(url, requestPromise);
+      }
   }
 
   if (signal) {

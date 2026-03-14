@@ -22,6 +22,10 @@ export const PaperDetailPage: React.FC = () => {
   const { data: paper, isLoading, error } = useOparlItem<Paper>(decodedId);
   const [summary, setSummary] = useState('');
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const detailErrorMessage =
+    error && 'status' in error && error.status === 401
+      ? 'Diese Vorlage ist derzeit nicht öffentlich verfügbar.'
+      : error?.message || 'Vorlage nicht gefunden';
 
   const handleSummarize = async () => {
     if (!paper) return;
@@ -44,7 +48,7 @@ export const PaperDetailPage: React.FC = () => {
   };
 
   if (isLoading) return <div className="p-12"><LoadingSpinner /></div>;
-  if (error || !paper) return <ErrorMessage message={error?.message || 'Vorlage nicht gefunden'} />;
+  if (error || !paper) return <ErrorMessage message={detailErrorMessage} />;
 
   return (
     <div className="animate-in fade-in duration-300">

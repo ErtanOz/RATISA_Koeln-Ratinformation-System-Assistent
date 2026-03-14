@@ -37,6 +37,64 @@ describe('fetchFromApi', () => {
     );
   });
 
+  it('retries transient 401 responses before succeeding', async () => {
+    vi.useFakeTimers();
+    const payload = { id: 'retry-ok' };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('{}', { status: 401, statusText: 'Unauthorized' }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(payload), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const request = fetchFromApi<typeof payload>('/retry-after-401');
+    await vi.advanceTimersByTimeAsync(500);
+
+    await expect(request).resolves.toEqual(payload);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not share an aborted inflight request across separate abort signals', async () => {
+    const resolvers: Array<(value: Response) => void> = [];
+    let resolveFirstFetchStarted: (() => void) | null = null;
+    const firstFetchStarted = new Promise<void>((resolve) => {
+      resolveFirstFetchStarted = resolve;
+    });
+    const fetchMock = vi.fn((_url: string, init?: RequestInit) => {
+      return new Promise<Response>((resolve, reject) => {
+        const signal = init?.signal;
+        signal?.addEventListener(
+          'abort',
+          () => reject(new DOMException('Aborted', 'AbortError')),
+          { once: true },
+        );
+        resolvers.push(resolve);
+        if (resolvers.length === 1) {
+          resolveFirstFetchStarted?.();
+        }
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+
+    const firstRequest = fetchFromApi('/same-resource', firstController.signal).catch((error) => error);
+    await firstFetchStarted;
+    firstController.abort();
+    await Promise.resolve();
+
+    const secondRequest = fetchFromApi<{ id: string }>('/same-resource', secondController.signal);
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    resolvers[1](new Response(JSON.stringify({ id: 'ok' }), { status: 200 }));
+
+    const firstError = await firstRequest;
+    await expect(secondRequest).resolves.toEqual({ id: 'ok' });
+    expect(firstError).toBeInstanceOf(DOMException);
+    expect((firstError as DOMException).name).toBe('AbortError');
+  });
+
   it('uses fresh cache entries and avoids duplicate fetches', async () => {
     const payload = { id: 'cached' };
     const fetchMock = vi
