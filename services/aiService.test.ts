@@ -64,6 +64,7 @@ describe("aiService", () => {
   });
 
   it("maps HTML 404 responses to a deployment-focused error message", async () => {
+    process.env.VITE_AI_HTTP_ENDPOINT = "/custom-ai";
     vi.mocked(global.fetch).mockResolvedValue(
       createTextResponse(
         404,
@@ -76,6 +77,36 @@ describe("aiService", () => {
 
     expect(result).toContain("nicht erreichbar (404)");
     expect(result).not.toContain("<!DOCTYPE html>");
+  });
+
+  it("falls back to the Netlify functions path when /ai returns 404", async () => {
+    vi.mocked(global.fetch)
+      .mockResolvedValueOnce(
+        createTextResponse(
+          404,
+          "<!DOCTYPE html><html><head><title>Page not found</title></head><body>Missing</body></html>",
+        ),
+      )
+      .mockResolvedValueOnce(createJsonResponse(200, { text: "Fallback ok." }));
+
+    const { askGemini } = await import("./aiService");
+    const result = await askGemini("ping");
+
+    expect(result).toBe("Fallback ok.");
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
+      "/ai/ask",
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      "/.netlify/functions/mcp/ai/ask",
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
   });
 
   it("uses structured parse results from the AI endpoint", async () => {

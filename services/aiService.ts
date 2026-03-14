@@ -25,6 +25,8 @@ const SERVICE_UNAVAILABLE_MESSAGE =
 const NOT_FOUND_MESSAGE =
   "Der AI-Dienst ist unter diesem Pfad nicht erreichbar (404). Prüfen Sie `VITE_AI_HTTP_ENDPOINT` oder die Weiterleitung für `/ai/*`.";
 
+const NETLIFY_FUNCTIONS_AI_ENDPOINT = "/.netlify/functions/mcp/ai";
+
 const looksLikeHtmlDocument = (value: string): boolean =>
   /<(!doctype|html)\b/i.test(value);
 
@@ -55,9 +57,18 @@ const toErrorMessage = (status: number, data: unknown): string => {
   return `AI request failed with status ${status}.`;
 };
 
-async function postJson<T>(path: string, body: Record<string, unknown>): Promise<JsonResult<T>> {
+const shouldTryNetlifyFallback = (endpoint: string, result: JsonResult<unknown>): boolean =>
+  endpoint === "/ai" &&
+  result.ok === false &&
+  (result.status === 0 || result.status === 404);
+
+async function postJsonOnce<T>(
+  endpoint: string,
+  path: string,
+  body: Record<string, unknown>,
+): Promise<JsonResult<T>> {
   try {
-    const response = await fetch(`${runtimeConfig.aiHttpEndpoint}${path}`, {
+    const response = await fetch(`${endpoint}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -93,6 +104,15 @@ async function postJson<T>(path: string, body: Record<string, unknown>): Promise
       data: error,
     };
   }
+}
+
+async function postJson<T>(path: string, body: Record<string, unknown>): Promise<JsonResult<T>> {
+  const primaryResult = await postJsonOnce<T>(runtimeConfig.aiHttpEndpoint, path, body);
+  if (!shouldTryNetlifyFallback(runtimeConfig.aiHttpEndpoint, primaryResult)) {
+    return primaryResult;
+  }
+
+  return postJsonOnce<T>(NETLIFY_FUNCTIONS_AI_ENDPOINT, path, body);
 }
 
 function fallbackParse(query: string): StructuredSearch {
